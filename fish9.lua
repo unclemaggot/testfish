@@ -43,20 +43,10 @@ local state = {
     AutoFish = false,
     AutoFavourite = false,
     AutoSell = false,
-    TPEnabled = true,
     SelectedTP = "None",
 }
 
 local allowedTiers = { [5]=true, [6]=true, [7]=true }
-
--- =========================
--- SAFE TELEPORT
--- =========================
-local function safeTeleport(vec3)
-    local char = player.Character
-    if not char or not char.PrimaryPart then return end
-    char.PrimaryPart.CFrame = CFrame.new(vec3)
-end
 
 -- =========================
 -- AUTO FAVOURITE
@@ -82,8 +72,10 @@ local function startAutoFavourite()
 end
 
 -- =========================
--- AUTO SELL
+-- AUTO SELL DENGAN THRESHOLD
 -- =========================
+local sellThreshold = 30 -- trigger auto sell jika total ikan >= 30
+
 local function startAutoSell()
     task.spawn(function()
         while state.AutoSell do
@@ -92,13 +84,26 @@ local function startAutoSell()
                 local DataReplion = Replion.Client:WaitReplion("Data")
                 local items = DataReplion and DataReplion:Get({"Inventory","Items"})
                 if type(items) ~= "table" then return end
-                local evt = ReplicatedStorage:FindFirstChild("Events")
-                evt = evt and evt:FindFirstChild("SellFish")
-                if not evt then return end
+
+                -- hitung total ikan
+                local totalCount = 0
                 for _, item in ipairs(items) do
                     local base = ItemUtility:GetItemData(item.Id)
-                    if base and base.Data and not allowedTiers[base.Data.Tier] then
-                        evt:FireServer(item.Uuid, item.Count or 1)
+                    if base and base.Data then
+                        totalCount = totalCount + (item.Count or 1)
+                    end
+                end
+
+                if totalCount >= sellThreshold then
+                    local evt = ReplicatedStorage:FindFirstChild("Events")
+                    evt = evt and evt:FindFirstChild("SellFish")
+                    if not evt then return end
+
+                    for _, item in ipairs(items) do
+                        local base = ItemUtility:GetItemData(item.Id)
+                        if base and base.Data and not allowedTiers[base.Data.Tier] then
+                            evt:FireServer(item.Uuid, item.Count or 1)
+                        end
                     end
                 end
             end)
@@ -186,6 +191,7 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
+-- MAIN TAB
 local Main = Window:CreateTab("Main", 4483362458)
 local Status = Main:CreateLabel("Status: Initializing...")
 
@@ -197,9 +203,7 @@ local function updateStatus()
                 state.SelectedTP))
 end
 
--- =========================
--- TOGGLES
--- =========================
+-- TOGGLES DI MAIN TAB
 Main:CreateToggle({
     Name = "Auto Fish V3 (1.7s, Perfect Cast)",
     CurrentValue = false,
@@ -221,7 +225,7 @@ Main:CreateToggle({
 })
 
 Main:CreateToggle({
-    Name = "Auto Sell (except Legendary/Mythic/Secret)",
+    Name = "Auto Sell (except Legendary/Mythic/Secret, Threshold 30)",
     CurrentValue = false,
     Callback = function(v)
         state.AutoSell = v
@@ -231,9 +235,10 @@ Main:CreateToggle({
 })
 
 -- =========================
--- TELEPORT BUTTONS (per lokasi)
+-- TELEPORT TAB
 -- =========================
-local TP_Section = Main:CreateSection({ Title = "Island Locations" })
+local TP_Tab = Window:CreateTab("Teleport", 4483362458)
+local TP_Section = TP_Tab:CreateSection({ Title = "Island Locations" })
 
 for _, loc_data in ipairs(island_locations) do
     TP_Section:CreateButton({
