@@ -8,8 +8,8 @@
 ------ =======[ Load WindUI ]
 --------------------------------------------
 -
--local Version = "1.6.4"
--local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/download/" .. Version .. "/main.lua"))()
+-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+    if not WindUI then return end
 -
 --------------------------------------------
 ------ =======[ GLOBAL FUNCTION ]
