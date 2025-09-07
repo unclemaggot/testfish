@@ -50,19 +50,39 @@ local state = {
 local allowedTiers = { [5]=true, [6]=true, [7]=true }
 
 -- =========================
--- SAFE TELEPORT
+-- SAFE TELEPORT (PATCHED)
 -- =========================
-local function safeTeleport(vec3)
-    if not state.TPEnabled then return end
+local function safeTeleport(vec3, force)
+    if not state.TPEnabled and not force then return false end
+
     local char = player.Character or player.CharacterAdded:Wait()
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hrp then return end
-    if hum then hum.Sit = false end
-    local cf = CFrame.new(vec3 + Vector3.new(0, 5, 0))
-    for _=1,3 do
-        hrp.CFrame = cf
-        task.wait(0.12)
+    if not char then return false end
+
+    local hrp
+    local tries = 0
+    repeat
+        hrp = char:FindFirstChild("HumanoidRootPart")
+            or char:FindFirstChild("UpperTorso")
+            or char:FindFirstChild("LowerTorso")
+            or (char.PrimaryPart and (char.PrimaryPart:IsA("BasePart") and char.PrimaryPart or nil))
+        tries += 1
+        if hrp then break end
+        task.wait(0.2)
+    until tries >= 25
+
+    if hrp and hrp:IsA("BasePart") then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then pcall(function() hum.Sit = false end) end
+
+        local targetCf = CFrame.new(vec3 + Vector3.new(0, 5, 0))
+        for i = 1, 3 do
+            pcall(function() hrp.CFrame = targetCf end)
+            task.wait(0.12)
+        end
+        return true
+    else
+        pcall(function() player:MoveTo(vec3) end)
+        return false
     end
 end
 
@@ -147,7 +167,6 @@ local function startAutoFish()
                 equipEvent:FireServer(1)
                 task.wait(0.1)
 
-                -- ✅ Perfect cast every time
                 chargeFunc:InvokeServer(workspace:GetServerTimeNow())
 
                 task.wait(0.1)
@@ -171,9 +190,9 @@ local function stopAutoFish()
 end
 
 -- =========================
--- TELEPORT LOCATIONS
+-- TELEPORT LOCATIONS (Dropdown + Button)
 -- =========================
-local main_islands = {
+local island_locations = {
     { Name = "Fisherman Island (Home)", Position = Vector3.new(34, 10, 2814) },
     { Name = "Kohana", Position = Vector3.new(-632, 16, 599) },
     { Name = "Kohana Volcano", Position = Vector3.new(-531, 24, 187) },
@@ -181,16 +200,17 @@ local main_islands = {
     { Name = "Esoteric Depths", Position = Vector3.new(2011, 22, 1395) },
     { Name = "Tropical Grove", Position = Vector3.new(-2095, 197, 3718) },
     { Name = "Lost Isle", Position = Vector3.new(-3608, 5, -1292) },
-    { Name = "Coral Reefs", Position = Vector3.new(-3023.97, 337.81, 2195.60) },
-}
-local secret_locations = {
     { Name = "Sisyphus Statue", Position = Vector3.new(-3742, -136, -1033) },
     { Name = "Treasure Room", Position = Vector3.new(-3600, -270, -1642) },
+    { Name = "Coral Reefs", Position = Vector3.new(-3023.97, 337.81, 2195.60) }
 }
 
-local function getByName(name, list)
-    for _, v in ipairs(list) do if v.Name == name then return v end end
+local islandNames = {}
+for _, v in ipairs(island_locations) do
+    table.insert(islandNames, v.Name)
 end
+
+local selectedIsland = island_locations[1].Name
 
 -- =========================
 -- RAYFIELD UI
@@ -253,34 +273,27 @@ Main:CreateToggle({
     end
 })
 
--- Dropdowns
-local islandNames, secretNames = {}, {}
-for _, i in ipairs(main_islands) do table.insert(islandNames, i.Name) end
-for _, s in ipairs(secret_locations) do table.insert(secretNames, s.Name) end
-
+-- Dropdown pilih lokasi
 Main:CreateDropdown({
-    Name = "Teleport to Island",
+    Name = "Select Teleport Location",
     Options = islandNames,
-    CurrentOption = "Fisherman Island (Home)",
+    CurrentOption = selectedIsland,
     Callback = function(choice)
+        selectedIsland = choice
         state.SelectedTP = choice
-        if state.TPEnabled then
-            local tgt = getByName(choice, main_islands)
-            if tgt then safeTeleport(tgt.Position) end
-        end
         updateStatus()
     end
 })
 
-Main:CreateDropdown({
-    Name = "Teleport to Secret Location",
-    Options = secretNames,
-    CurrentOption = "Sisyphus Statue",
-    Callback = function(choice)
-        state.SelectedTP = choice
-        if state.TPEnabled then
-            local tgt = getByName(choice, secret_locations)
-            if tgt then safeTeleport(tgt.Position) end
+-- Tombol teleport
+Main:CreateButton({
+    Name = "Teleport Now",
+    Callback = function()
+        for _, v in ipairs(island_locations) do
+            if v.Name == selectedIsland then
+                safeTeleport(v.Position, true)
+                break
+            end
         end
         updateStatus()
     end
