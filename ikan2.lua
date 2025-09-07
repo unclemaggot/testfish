@@ -1,230 +1,264 @@
--- gui loader
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
-local Window = OrionLib:MakeWindow({
-    Name = "Fish It! |  ", 
-    HidePremium = false,
-    SaveConfig = true, 
-    ConfigFolder = "FishConfig",
-    IntroEnabled = true,
-    IntroText = "Fish It! Script",
-    IntroIcon = "rbxassetid://4483345998",
-    Icon = "rbxassetid://4483345998"
-})
+-- Load Rayfield
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- notification
-OrionLib:MakeNotification({
-    Name = "Script Loaded!",
-    Image = "rbxassetid://4483345998",
-    Time = 5
-})
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
 
--- tabs with icons
-local CreditsTab = Window:MakeTab({Name = "Credits", Icon = "rbxassetid://4483345998"})
-local MainTab = Window:MakeTab({Name = "Main", Icon = "rbxassetid://4483345998"})
-local TpTab = Window:MakeTab({Name = "Teleports", Icon = "rbxassetid://4483345998"})
-local MiscTab = Window:MakeTab({Name = "Misc", Icon = "rbxassetid://4483345998"})
-
--- sections
-local MainSection = MainTab:AddSection({
-    Name = "Auto Farms"
-})
-
-local TpSection = TpTab:AddSection({
-    Name = "Locations"
-})
-
-local MiscSection = MiscTab:AddSection({
-    Name = "Extra Features"
-})
--- variables setup
-getgenv().autoFarmEnabled = false
-getgenv().coralFarmEnabled = false
-getgenv().depthsFarmEnabled = false
-getgenv().volcanoFarmEnabled = false
-local platform = nil
-
--- disable key
-game:GetService("UserInputService").InputBegan:Connect(function(input)
-if input.KeyCode == Enum.KeyCode.T then
-getgenv().autoFarmEnabled = false
-getgenv().coralFarmEnabled = false
-getgenv().depthsFarmEnabled = false
-getgenv().volcanoFarmEnabled = false
-if platform then platform:Destroy() platform = nil end
-OrionLib:MakeNotification({
-Name = "Auto Farm Disabled",
-Content = "Press any autofarm button to enable again",
-Image = "rbxassetid://4483345998",
-Time = 3
-})
+-- Safe require helper
+local function safeRequire(pathTbl)
+    local ptr = ReplicatedStorage
+    for _, seg in ipairs(pathTbl) do
+        ptr = ptr:FindFirstChild(seg)
+        if not ptr then return nil end
+    end
+    local ok, mod = pcall(require, ptr)
+    return ok and mod or nil
 end
-end)
 
--- autofarms
-MainSection:AddToggle({
-Name = "Autofarm Kohana",
-Default = false,
-Callback = function(state)
-getgenv().autoFarmEnabled = state
-if state then
-OrionLib:MakeNotification({
-Name = "Kohana Farm",
-Content = "Started farming at Kohana",
-Image = "rbxassetid://4483345998",
-Time = 3
-})
-platform = Instance.new("Part")
-platform.Size = Vector3.new(5, 1, 5)
-platform.Anchored = true
-platform.Position = game.Players.LocalPlayer.Character.HumanoidRootPart.Position - Vector3.new(0, 3, 0)
-platform.Parent = workspace
+local FishingController = safeRequire({"Controllers","FishingController"})
+local AnimationController = safeRequire({"Controllers","AnimationController"})
+local Replion = safeRequire({"Packages","Replion"}) or safeRequire({"Packages","replion"})
+local ItemUtility = safeRequire({"Shared","ItemUtility"})
 
-spawn(function()
-while getgenv().autoFarmEnabled do
-game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(-759.0910034179688, 24.309707641601562, 429.12823486328125)
-platform.Position = game.Players.LocalPlayer.Character.HumanoidRootPart.Position - Vector3.new(0, 3, 0)
-mouse1click()
-wait()
+-- Net folder
+local function getNetFolder()
+    local packages = ReplicatedStorage:WaitForChild("Packages", 10)
+    if not packages then return nil end
+    local index = packages:FindFirstChild("_Index")
+    if index then
+        for _, child in ipairs(index:GetChildren()) do
+            if child.Name:match("^sleitnick_net@") then
+                return child:FindFirstChild("net")
+            end
+        end
+    end
+    return ReplicatedStorage:FindFirstChild("net") or ReplicatedStorage:FindFirstChild("Net")
 end
-end)
-else
-if platform then platform:Destroy() platform = nil end
-end
-end
-})
 
-MainSection:AddToggle({
-Name = "Autofarm Coral Reefs",
-Default = false,
-Callback = function(state)
-getgenv().coralFarmEnabled = state
-if state then
-OrionLib:MakeNotification({
-Name = "Coral Farm",
-Content = "Started farming at Coral Reefs",
-Image = "rbxassetid://4483345998",
-Time = 3
-})
-platform = Instance.new("Part")
-platform.Size = Vector3.new(5, 1, 5)
-platform.Anchored = true
-platform.Position = game.Players.LocalPlayer.Character.HumanoidRootPart.Position - Vector3.new(0, 3, 0)
-platform.Parent = workspace
-
-spawn(function()
-while getgenv().coralFarmEnabled do
-game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(-3222.68994140625, 9.972307205200195, 1898.0626220703125)
-platform.Position = game.Players.LocalPlayer.Character.HumanoidRootPart.Position - Vector3.new(0, 3, 0)
-mouse1click()
-wait()
-end
-end)
-else
-if platform then platform:Destroy() platform = nil end
-end
-end
-})
-MainSection:AddToggle({
-Name = "Autofarm Depths",
-Default = false,
-Callback = function(state)
-getgenv().depthsFarmEnabled = state
-if state then
-OrionLib:MakeNotification({
-Name = "Depths Farm",
-Content = "Started farming in The Depths",
-Image = "rbxassetid://4483345998",
-Time = 3
-})
-platform = Instance.new("Part")
-platform.Size = Vector3.new(5, 1, 5)
-platform.Anchored = true
-platform.Position = game.Players.LocalPlayer.Character.HumanoidRootPart.Position - Vector3.new(0, 3, 0)
-platform.Parent = workspace
-
-spawn(function()
-while getgenv().depthsFarmEnabled do
-game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(3239.964599609375, -1298.2198486328125, 1353.6944580078125)
-platform.Position = game.Players.LocalPlayer.Character.HumanoidRootPart.Position - Vector3.new(0, 3, 0)
-mouse1click()
-wait()
-end
-end)
-else
-if platform then platform:Destroy() platform = nil end
-end
-end
-})
-
--- teleports with notifications
-local locations = {
-["Starter Island"] = CFrame.new(23.435884475708008, 4.625000953674316, 2868.347412109375),
-["Kohana Island"] = CFrame.new(-842.8712158203125, 55.500057220458984, 146.21389770507812),
-["Kohana Volcano"] = CFrame.new(-606.581787109375, 59.000057220458984, 105.82990264892578),
-["Coral Reefs"] = CFrame.new(-2853.76318359375, 47.499996185302734, 1988.1397705078125),
-["The Depths"] = CFrame.new(2002.4705810546875, 12.10128402709961, 1385.3233642578125),
-["Altar Enchant"] = CFrame.new(3177.329345703125, -1302.72998046875, 1427.3759765625)
+-- =========================
+-- STATE
+-- =========================
+local state = {
+    AutoFish = false,
+    AutoFavourite = false,
+    AutoSell = false,
+    SelectedTP = "None",
 }
 
-for name, cf in pairs(locations) do
-TpSection:AddButton({
-Name = "Teleport to " .. name,
-Callback = function()
-game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = cf
-OrionLib:MakeNotification({
-Name = "Teleported",
-Content = "Teleported to " .. name,
-Image = "rbxassetid://4483345998",
-Time = 2
-})
-end
-})
+local allowedTiers = { [5]=true, [6]=true, [7]=true }
+
+-- =========================
+-- AUTO FAVOURITE
+-- =========================
+local function startAutoFavourite()
+    task.spawn(function()
+        while state.AutoFavourite do
+            pcall(function()
+                if not Replion or not ItemUtility then return end
+                local DataReplion = Replion.Client:WaitReplion("Data")
+                local items = DataReplion and DataReplion:Get({"Inventory","Items"})
+                if type(items) ~= "table" then return end
+                for _, item in ipairs(items) do
+                    local base = ItemUtility:GetItemData(item.Id)
+                    if base and base.Data and allowedTiers[base.Data.Tier] and not item.Favorited then
+                        item.Favorited = true
+                    end
+                end
+            end)
+            task.wait(5)
+        end
+    end)
 end
 
--- misc features
-MiscSection:AddButton({
-Name = "Load Infinite Yield",
-Callback = function()
-loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
-OrionLib:MakeNotification({
-Name = "Loaded",
-Content = "Infinite Yield loaded successfully",
-Image = "rbxassetid://4483345998",
-Time = 3
-})
+-- =========================
+-- AUTO SELL (every 30 non-favorited fish)
+-- =========================
+local sellThreshold = 30
+
+local function startAutoSellLoop()
+    task.spawn(function()
+        while state.AutoSell do
+            local DataReplion = Replion.Client:WaitReplion("Data")
+            local items = DataReplion and DataReplion:Get({"Inventory","Items"})
+            if type(items) ~= "table" then
+                task.wait(2)
+                continue
+            end
+
+            -- count non-favorited fish
+            local totalFish = 0
+            for _, item in ipairs(items) do
+                if not item.Favorited then
+                    totalFish = totalFish + (item.Count or 1)
+                end
+            end
+
+            if totalFish >= sellThreshold then
+                local evt = ReplicatedStorage:FindFirstChild("Events")
+                evt = evt and evt:FindFirstChild("SellFish")
+                if evt then
+                    for _, item in ipairs(items) do
+                        if not item.Favorited then
+                            evt:FireServer(item.Uuid, item.Count or 1)
+                        end
+                    end
+                end
+            end
+            task.wait(5)
+        end
+    end)
 end
+
+-- =========================
+-- AUTO FISH V3
+-- =========================
+local autoFishLoop
+local function playCastAnim()
+    pcall(function()
+        if AnimationController and AnimationController.PlayAnimation then
+            AnimationController:PlayAnimation("CastFromFullChargePosition1Hand")
+        end
+    end)
+end
+
+local function startAutoFish()
+    if autoFishLoop then task.cancel(autoFishLoop) end
+    autoFishLoop = task.spawn(function()
+        local net = getNetFolder(); if not net then return end
+        local equipEvent = net:WaitForChild("RE/EquipToolFromHotbar")
+        local chargeFunc = net:WaitForChild("RF/ChargeFishingRod")
+        local startMini  = net:WaitForChild("RF/RequestFishingMinigameStarted")
+        local complete   = net:WaitForChild("RE/FishingCompleted")
+
+        while state.AutoFish do
+            if FishingController and FishingController.OnCooldown and FishingController:OnCooldown() then
+                repeat task.wait(0.2) until not (FishingController:OnCooldown()) or not state.AutoFish
+            end
+            if not state.AutoFish then break end
+
+            pcall(function()
+                playCastAnim()
+                equipEvent:FireServer(1)
+                task.wait(0.1)
+
+                chargeFunc:InvokeServer(workspace:GetServerTimeNow())
+                task.wait(0.1)
+                startMini:InvokeServer(-0.75, 1)
+                task.wait(0.2)
+
+                for i=1,20 do
+                    complete:FireServer()
+                    task.wait(0.05)
+                end
+            end)
+
+            local t = os.clock()
+            while os.clock() - t < 1.7 and state.AutoFish do task.wait() end
+        end
+    end)
+end
+
+local function stopAutoFish()
+    if autoFishLoop then task.cancel(autoFishLoop); autoFishLoop = nil end
+end
+
+-- =========================
+-- TELEPORT FUNCTION
+-- =========================
+local function safeTeleport(vec3)
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
+    hrp.CFrame = CFrame.new(vec3)
+end
+
+-- =========================
+-- TELEPORT LOCATIONS
+-- =========================
+local island_locations = {
+    { Name = "Fisherman Island (Home)", Position = Vector3.new(34, 10, 2814) },
+    { Name = "Kohana", Position = Vector3.new(-632, 16, 599) },
+    { Name = "Kohana Volcano", Position = Vector3.new(-531, 24, 187) },
+    { Name = "Crater Island", Position = Vector3.new(1016, 23, 5078) },
+    { Name = "Esoteric Depths", Position = Vector3.new(2011, 22, 1395) },
+    { Name = "Tropical Grove", Position = Vector3.new(-2095, 197, 3718) },
+    { Name = "Lost Isle", Position = Vector3.new(-3608, 5, -1292) },
+    { Name = "Sisyphus Statue", Position = Vector3.new(-3742, -136, -1033) },
+    { Name = "Treasure Room", Position = Vector3.new(-3600, -270, -1642) },
+    { Name = "Coral Reefs", Position = Vector3.new(-3023.97, 337.81, 2195.60) }
+}
+
+-- =========================
+-- RAYFIELD UI
+-- =========================
+local Window = Rayfield:CreateWindow({
+    Name = "FishIt Lite",
+    LoadingTitle = "FishIt Lite",
+    LoadingSubtitle = "Rayfield Edition",
+    KeySystem = false
 })
 
-MiscSection:AddToggle({
-Name = "Auto Collect Items",
-Default = false,
-Callback = function(state)
-getgenv().autoCollect = state
-while getgenv().autoCollect do
-for _,v in pairs(workspace:GetChildren()) do
-if v:IsA("Tool") then
-v.Handle.CFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
+-- MAIN TAB
+local Main = Window:CreateTab("Main", 4483362458)
+local Status = Main:CreateLabel("Status: Loading...")
+
+local function updateStatus()
+    Status:Set(("AutoFish: %s | AutoFavourite: %s | AutoSell: %s | Last Teleport: %s")
+        :format(state.AutoFish and "ON" or "OFF",
+                state.AutoFavourite and "ON" or "OFF",
+                state.AutoSell and "ON" or "OFF",
+                state.SelectedTP))
 end
-end
-wait()
-end
-end
+
+-- TOGGLES WITH ENGLISH DESCRIPTION
+Main:CreateToggle({
+    Name = "Auto Fish V3 (Perfect Cast, 1.7s)",
+    CurrentValue = false,
+    Description = "Automatically casts fishing rod perfectly every 1.7 seconds.",
+    Callback = function(v)
+        state.AutoFish = v
+        if v then startAutoFish() else stopAutoFish() end
+        updateStatus()
+    end
 })
 
-MiscSection:AddSlider({
-Name = "WalkSpeed",
-Min = 16,
-Max = 500,
-Default = 16,
-Color = Color3.fromRGB(255,255,255),
-Increment = 1,
-Callback = function(Value)
-game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = Value
-end    
+Main:CreateToggle({
+    Name = "Auto Favourite (Legendary/Mythic/Secret)",
+    CurrentValue = false,
+    Description = "Automatically mark Legendary, Mythic, and Secret fish as favorite.",
+    Callback = function(v)
+        state.AutoFavourite = v
+        if v then startAutoFavourite() end
+        updateStatus()
+    end
 })
 
--- credits
-CreditsTab:AddParagraph("Credits","Script made")
-MainTab:AddParagraph("Keybinds","Press T to disable all autofarms")
+Main:CreateToggle({
+    Name = "Auto Sell (Every 30 non-favorite fish)",
+    CurrentValue = false,
+    Description = "Automatically sells all non-favorited fish once you have caught 30 fish.",
+    Callback = function(v)
+        state.AutoSell = v
+        if v then startAutoSellLoop() end
+        updateStatus()
+    end
+})
 
-OrionLib:Init()
+-- TELEPORT TAB
+local TP_Tab = Window:CreateTab("Teleport", 4483362458)
+local TP_Section = TP_Tab:CreateSection({ Title = "Island Locations" })
+
+for _, loc_data in ipairs(island_locations) do
+    TP_Section:CreateButton({
+        Title = loc_data.Name,
+        Description = "Teleport instantly to " .. loc_data.Name,
+        Callback = function()
+            safeTeleport(loc_data.Position)
+            state.SelectedTP = loc_data.Name
+            updateStatus()
+        end
+    })
+end
+
+-- INITIAL STATUS UPDATE
+updateStatus()
