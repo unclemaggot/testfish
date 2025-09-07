@@ -1,4 +1,6 @@
--- Load Rayfield
+-- FishIt Lite (Rayfield Edition)
+-- AutoFish V3 (Perfect Cast, 1.4s) + AutoFav (all fish) + AutoSell + Teleport buttons
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Players = game:GetService("Players")
@@ -9,7 +11,7 @@ local player = Players.LocalPlayer
 local function safeRequire(pathTbl)
     local ptr = ReplicatedStorage
     for _, seg in ipairs(pathTbl) do
-        ptr = ptr:FindFirstChild(seg)
+        ptr = ptr and ptr:FindFirstChild(seg)
         if not ptr then return nil end
     end
     local ok, mod = pcall(require, ptr)
@@ -21,9 +23,7 @@ local AnimationController = safeRequire({"Controllers","AnimationController"})
 local Replion = safeRequire({"Packages","Replion"}) or safeRequire({"Packages","replion"})
 local ItemUtility = safeRequire({"Shared","ItemUtility"})
 
--- =========================
--- STATE
--- =========================
+-- State
 local state = {
     AutoFish = false,
     AutoFavourite = false,
@@ -31,7 +31,7 @@ local state = {
 }
 
 -- =========================
--- AUTO FAVOURITE (all fish)
+-- AUTO FAVOURITE (All Fish)
 -- =========================
 local function startAutoFavourite()
     task.spawn(function()
@@ -53,7 +53,7 @@ local function startAutoFavourite()
 end
 
 -- =========================
--- AUTO SELL (exclude Legendary/Mythic/Secret)
+-- AUTO SELL (except Legendary/Mythic/Secret)
 -- =========================
 local allowedTiers = { [5]=true, [6]=true, [7]=true }
 
@@ -81,8 +81,10 @@ local function startAutoSell()
 end
 
 -- =========================
--- AUTO FISH V3 (with perfect cast)
+-- AUTO FISH (Perfect Cast, 1.4s) – replaced with your version
 -- =========================
+local autoFishLoop
+
 local function playCastAnim()
     pcall(function()
         if AnimationController and AnimationController.PlayAnimation then
@@ -91,15 +93,14 @@ local function playCastAnim()
     end)
 end
 
-local autoFishLoop
 local function startAutoFish()
     if autoFishLoop then task.cancel(autoFishLoop) end
     autoFishLoop = task.spawn(function()
-        local net = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):FindFirstChildOfClass("Folder")
-        local equipEvent = net:WaitForChild("RE/EquipToolFromHotbar")
-        local chargeFunc = net:WaitForChild("RF/ChargeFishingRod")
-        local startMini  = net:WaitForChild("RF/RequestFishingMinigameStarted")
-        local complete   = net:WaitForChild("RE/FishingCompleted")
+        local netFolder = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):FindFirstChildOfClass("Folder")
+        local equipEvent = netFolder:WaitForChild("RE/EquipToolFromHotbar")
+        local chargeFunc = netFolder:WaitForChild("RF/ChargeFishingRod")
+        local startMini  = netFolder:WaitForChild("RF/RequestFishingMinigameStarted")
+        local complete   = netFolder:WaitForChild("RE/FishingCompleted")
 
         while state.AutoFish do
             if FishingController and FishingController.OnCooldown and FishingController:OnCooldown() then
@@ -112,7 +113,7 @@ local function startAutoFish()
                 equipEvent:FireServer(1)
                 task.wait(0.1)
 
-                -- ✅ perfect cast
+                -- Perfect cast
                 chargeFunc:InvokeServer(workspace:GetServerTimeNow())
 
                 task.wait(0.1)
@@ -126,7 +127,7 @@ local function startAutoFish()
             end)
 
             local t = os.clock()
-            while os.clock() - t < 1.7 and state.AutoFish do task.wait() end
+            while os.clock() - t < 1.4 and state.AutoFish do task.wait() end
         end
     end)
 end
@@ -136,7 +137,7 @@ local function stopAutoFish()
 end
 
 -- =========================
--- TELEPORT LOCATIONS (buttons)
+-- TELEPORT LOCATIONS
 -- =========================
 local island_locations = {
     { Name = "Fisherman Island (Home)", Position = Vector3.new(34, 10, 2814) },
@@ -174,7 +175,7 @@ local TP = Window:CreateTab("Teleport", 4483362458)
 
 -- Toggles
 Main:CreateToggle({
-    Name = "Auto Fish V3 (Perfect Cast, 1.7s)",
+    Name = "Auto Fish V3 (Perfect Cast, 1.4s)",
     CurrentValue = false,
     Callback = function(v)
         state.AutoFish = v
