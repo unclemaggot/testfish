@@ -13,19 +13,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
-local Notifs = {
-	WBN = true,
-	UniVBlockNotif = true,
-	AcceptBN = true,
-	TradeblockNotif = true,
-	AutoTBlockNotif = true,
-	floatBlockNotif = true,
-	FavBlockNotif = true,
-	FishBlockNotif = true,
-	DelayBlockNotif = true,
-	AFKBN = true,
-	APIBN = true
-}
+
 -- Safe require helper from Rayfield version
 local function safeRequire(pathTbl)
     local ptr = ReplicatedStorage
@@ -65,6 +53,7 @@ local state = {
     AutoFish = false,
     AutoFavourite = false,
     AutoSell = false,
+    AutoSellThreshold = 60,
 }
 
 -- Include Epic, Legendary, Mythic, Secret fish
@@ -101,10 +90,9 @@ local function startAutoFavourite()
 end
 
 -- =========================
--- AUTO SELL (New Logic)
+-- AUTO SELL (MODIFIED LOGIC)
 -- =========================
 local lastSellTime = 0
-local AUTO_SELL_THRESHOLD = 60 -- Sell when non-favorited fish > 60
 local AUTO_SELL_DELAY = 60 -- Minimum seconds between sells
 
 local function startAutoSell()
@@ -123,7 +111,7 @@ local function startAutoSell()
                     end
                 end
 
-                if unfavoritedCount >= AUTO_SELL_THRESHOLD and os.time() - lastSellTime >= AUTO_SELL_DELAY then
+                if unfavoritedCount >= state.AutoSellThreshold and os.time() - lastSellTime >= AUTO_SELL_DELAY then
                     local netFolder = getNetFolder()
                     if netFolder then
                         local sellFunc = netFolder:FindFirstChild("RF/SellAllItems")
@@ -140,12 +128,8 @@ local function startAutoSell()
 end
 
 -- =========================
--- AUTO FISH V4 (Configurable)
+-- AUTO FISH V3 (New Logic)
 -- =========================
-
--- Adjust this to control fishing speed (in seconds per cycle)
-local FISH_DELAY = 4 -- recommended: 4 (safe), 3 (faster), 5+ (extra safe)
-
 local autoFishLoop
 local function playCastAnim()
     pcall(function()
@@ -166,31 +150,26 @@ local function startAutoFish()
 
         while state.AutoFish do
             if FishingController and FishingController.OnCooldown and FishingController:OnCooldown() then
-                repeat task.wait(0.3) until not (FishingController:OnCooldown()) or not state.AutoFish
+                repeat task.wait(0.2) until not (FishingController:OnCooldown()) or not state.AutoFish
             end
             if not state.AutoFish then break end
 
             pcall(function()
                 playCastAnim()
                 equipEvent:FireServer(1)
-                task.wait(0.3)
-
+                task.wait(0.1)
                 chargeFunc:InvokeServer(workspace:GetServerTimeNow())
-                task.wait(0.5)
-
+                task.wait(0.1)
                 startMini:InvokeServer(-0.75, 1)
-                task.wait(1)
-
-                -- Completion firing depends on speed (scaled)
-                local completeCount = math.max(5, math.floor(FISH_DELAY * 2))
-                for i = 1, completeCount do
+                task.wait(0.2)
+                for i=1,20 do
                     complete:FireServer()
-                    task.wait(FISH_DELAY / (completeCount * 2)) 
+                    task.wait(0.05)
                 end
             end)
 
-            -- Final cooldown before next cast
-            task.wait(FISH_DELAY / 2)
+            local t = os.clock()
+            while os.clock() - t < 0.7 and state.AutoFish do task.wait() end -- delay 0.7s
         end
     end)
 end
@@ -220,10 +199,44 @@ end
 -------------------------------------------
 ----- =======[ NOTIFY FUNCTION ]
 -------------------------------------------
--- Kept from original for Fish Notifier
+-- NEW: Replaced the old function with this new set
+
 local function NotifySuccess(title, message, duration)
-    WindUI:Notify({ Title = title, Content = message, Duration = duration, Icon = "circle-check" })
+    WindUI:Notify({
+        Title = title,
+        Content = message,
+        Duration = duration or 5,
+        Icon = "circle-check"
+    })
 end
+
+local function NotifyError(title, message, duration)
+    WindUI:Notify({
+        Title = title,
+        Content = message,
+        Duration = duration or 5,
+        Icon = "ban"
+    })
+end
+
+local function NotifyInfo(title, message, duration)
+    WindUI:Notify({
+        Title = title,
+        Content = message,
+        Duration = duration or 5,
+        Icon = "info"
+    })
+end
+
+local function NotifyWarning(title, message, duration)
+    WindUI:Notify({
+        Title = title,
+        Content = message,
+        Duration = duration or 5,
+        Icon = "triangle-alert"
+    })
+end
+
 
 -------------------------------------------
 ----- =======[ LOAD WINDOW ]
@@ -323,10 +336,22 @@ Main:Toggle({
 })
 
 Main:Toggle({
-    Title = "Auto Sell (Threshold)",
+    Title = "Auto Sell",
     Callback = function(Value)
         state.AutoSell = Value
         if Value then startAutoSell() end
+    end
+})
+
+Main:Slider({
+    Title = "Auto-Sell Threshold",
+    Desc = "Automatically sells non-favorited items when the count exceeds this value.",
+    Min = 10,
+    Max = 200,
+    Default = 60,
+    Float = 0, -- Use whole numbers
+    Callback = function(Value)
+        state.AutoSellThreshold = Value
     end
 })
 
@@ -356,7 +381,6 @@ for name, pos in pairs(island_locations) do
             if not state.AutoFish then
                 state.AutoFish = true
                 startAutoFish()
-                -- Update the toggle visually using the direct reference
                 if autoFishToggle then
                     autoFishToggle:Set(true)
                 end
@@ -364,195 +388,156 @@ for name, pos in pairs(island_locations) do
         end
     })
 end
--- =========================
--- EPIC+ FISH WEBHOOK NOTIFICATION
--- =========================
 
-local REObtainedNewFishNotification = game:GetService("ReplicatedStorage")
-    :WaitForChild("Packages")
-    :WaitForChild("_Index")
-    :WaitForChild("sleitnick_net@0.2.0")
-    :WaitForChild("net")
-    :WaitForChild("RE/ObtainedNewFishNotification")
+-------------------------------------------
+----- =======[ FISH NOTIF TAB ]
+-------------------------------------------
 
--- Simple rarity filter (Epic+)
-local RarityOrder = {
-    ["Common"] = 1,
-    ["Uncommon"] = 2,
-    ["Rare"] = 3,
-    ["Epic"] = 4,
-    ["Legendary"] = 5,
-    ["Mythic"] = 6,
-    ["Secret"] = 7
-}
+local webhookPath = nil
 
-REObtainedNewFishNotification.OnClientEvent:Connect(function(fishData)
-    if not FishWebhookEnabled or not webhookPath or webhookPath == "" then return end
+FishNotif:Paragraph({
+	Title = "Fish Notification",
+	Color = "Green",
+	Desc = [[This feature sends a notification to Discord when you catch a rare fish. Enter a webhook key to connect to your channel.]]
+})
 
-    local name = fishData.Name or "Unknown Fish"
-    local rarity = fishData.Rarity or "Unknown"
+local function validateWebhook(path)
+	if not path or path == "" then return false, "Key is empty" end
+	if not path:match("^%d+/.+") then return false, "Invalid format" end
+	local url = "https://discord.com/api/webhooks/" .. path
+	local success, response = pcall(game.HttpGet, game, url)
+	if not success then return false, "Failed to connect to Discord" end
+	local ok, data = pcall(HttpService.JSONDecode, HttpService, response)
+	if not ok or not data or not data.channel_id then return false, "Invalid" end
+	return true, data.channel_id
+end
 
-    -- only send if Epic+
-    if RarityOrder[rarity] and RarityOrder[rarity] >= 4 then
-        local username = LocalPlayer.DisplayName
-        local userId = LocalPlayer.UserId
-        local avatarUrl = string.format(
-            "https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=420&height=420&format=png",
-            userId
-        )
+FishNotif:Input({
+    Title = "Webhook Key",
+    Desc = "Input your Discord webhook key here!",
+    Placeholder = "Enter Key....",
+    Callback = function(text)
+		if text == "" then return end
+        webhookPath = text
+        local isValid, result = validateWebhook(webhookPath)
+        -- UPDATED: Use new notification functions
+        if isValid then
+            NotifySuccess("Key Valid", "Channel ID: " .. tostring(result))
+        else
+            NotifyError("Key Invalid", tostring(result))
+        end
+    end
+})
 
-        local WebhookURL = "https://discord.com/api/webhooks/" .. webhookPath
-        local data = {
-            ["username"] = "FishBot",
-            ["embeds"] = {{
-                ["title"] = "🎣 Epic+ Fish Caught!",
-                ["description"] = string.format([[
-Hei **%s**! 🎣  
-You just caught a **%s**!
+local FishCategories = { ["Secret"]={}, ["Mythic"]={}, ["Legendary"]={}, ["Epic"]={} }
+local FishDataById, VariantsByName, SelectedCategories = {}, {}, {}
 
-🧾 Name : **%s**  
-🌟 Rarity : **%s**
-]], username, name, name, rarity),
-                ["color"] = tonumber("0x8000ff"), -- purple for epic+
-                ["thumbnail"] = { ["url"] = avatarUrl },
-                ["footer"] = { ["text"] = "Fish Notification • " .. os.date("%d %B %Y, %H:%M:%S") }
-            }}
-        }
-
-        local requestFunc = syn and syn.request or http and http.request or http_request or request or fluxus and fluxus.request
-        if requestFunc then
-            requestFunc({
-                Url = WebhookURL,
-                Method = "POST",
-                Headers = { ["Content-Type"] = "application/json" },
-                Body = HttpService:JSONEncode(data)
-            })
+pcall(function()
+    for _, item in ipairs(ReplicatedStorage.Items:GetChildren()) do
+        local ok, data = pcall(require, item)
+        if ok and data.Data and data.Data.Type == "Fishes" then
+            FishDataById[data.Data.Id] = { Name = data.Data.Name, SellPrice = data.SellPrice or 0 }
+        end
+    end
+    for _, v in ipairs(ReplicatedStorage.Variants:GetChildren()) do
+        local ok, data = pcall(require, v)
+        if ok and data.Data and data.Data.Type == "Variant" then
+            VariantsByName[data.Data.Name] = data.SellMultiplier or 1
         end
     end
 end)
 
--------------------------------------------
------ =======[ FISH NOTIFICATION FEATURE ]
--------------------------------------------
-
-local webhookPath = nil
-local FishWebhookEnabled = false
-local LocalPlayer = game:GetService("Players").LocalPlayer
-local HttpService = game:GetService("HttpService")
-
--- Webhook Key Input
-FishNotif:Input({
-    Title = "Webhook Key",
-    Desc = "Paste your Discord webhook key here",
-    Placeholder = "id/token",
-    Callback = function(text)
-        webhookPath = text
-        WindUI:Notify({
-            Title = "Webhook Set",
-            Content = "Webhook saved successfully!",
-            Duration = 5,
-            Icon = "circle-check"
-        })
-    end
-})
-
--- Toggle Button
-FishNotif:Button({
-    Title = "Toggle Notifications",
-    Desc = "Turn fish notifications ON or OFF",
-    Callback = function()
-        FishWebhookEnabled = not FishWebhookEnabled
-        WindUI:Notify({
-            Title = "Fish Notification",
-            Content = FishWebhookEnabled and "✅ Notifications Activated!" or "❌ Notifications Deactivated!",
-            Duration = 5,
-            Icon = FishWebhookEnabled and "bell-ring" or "bell-off"
-        })
-    end
-})
-
--- Dropdown Categories
-local SelectedCategories = {}
 FishNotif:Dropdown({
-    Title = "Select Fish Categories",
-    Desc = "Choose which categories to send to Discord",
-    Values = {"Secret", "Legendary", "Mythic", "Epic"},
-    Multi = true,
-    Default = {"Secret"},
-    Callback = function(selected)
-        SelectedCategories = selected
-        WindUI:Notify({
-            Title = "Fish Category Updated",
-            Content = "Now tracking: " .. table.concat(SelectedCategories, ", "),
-            Duration = 5,
-            Icon = "circle-check"
-        })
-    end
+	Title = "Select Fish Categories",
+	Desc = "Choose which categories to send to webhook",
+	Values = {"Secret", "Legendary", "Mythic", "Epic"},
+	Multi = true,
+	Default = {"Secret"},
+	Callback = function(selected)
+		SelectedCategories = selected
+	end
 })
 
--- Test Webhook Button
-FishNotif:Button({
-    Title = "Test Webhook",
-    Desc = "Send a test notification to Discord",
-    Callback = function()
-        if not webhookPath or webhookPath == "" then
-            WindUI:Notify({
-                Title = "Webhook Error",
-                Content = "⚠️ No webhook set!",
-                Duration = 5,
-                Icon = "ban"
-            })
-            return
-        end
-
-        local WebhookURL = "https://discord.com/api/webhooks/" .. webhookPath
-        local username = LocalPlayer.DisplayName
-        local userId = LocalPlayer.UserId
-        local avatarUrl = string.format(
-            "https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=420&height=420&format=png",
-            userId
-        )
-
-        local testData = {
-            ["username"] = "FishBot",
-            ["embeds"] = {{
-                ["title"] = "🎣 Test Fish Notification",
-                ["description"] = string.format([[
-Hei **%s**! 🎣  
-You have successfully caught a fish.
-
-🧾 Name : **Epic Test Fish**  
-🌟 Rarity : **Epic**  
-💰 Sell Price : **12345**
-]], username),
-                ["color"] = tonumber("0x00bfff"),
-                ["thumbnail"] = { ["url"] = avatarUrl },
-                ["footer"] = { ["text"] = "Fish Notification • " .. os.date("%d %B %Y, %H:%M:%S") }
-            }}
-        }
-
-        local requestFunc = syn and syn.request or http and http.request or http_request or request or fluxus and fluxus.request
-        if requestFunc then
-            requestFunc({
-                Url = WebhookURL,
-                Method = "POST",
-                Headers = { ["Content-Type"] = "application/json" },
-                Body = HttpService:JSONEncode(testData)
-            })
-            WindUI:Notify({
-                Title = "Webhook Test",
-                Content = "✅ Test notification sent to Discord!",
-                Duration = 5,
-                Icon = "circle-check"
-            })
-        else
-            WindUI:Notify({
-                Title = "Executor Error",
-                Content = "⚠️ Your executor doesn’t support HTTP requests!",
-                Duration = 5,
-                Icon = "ban"
-            })
+local function isTargetFish(fishName, rarity)
+    for _, category in pairs(SelectedCategories) do
+        if string.find(string.lower(rarity), string.lower(category)) then
+            return true
         end
     end
-})
+    return false
+end
 
+local function GetRobloxImage(assetId)
+	local url = "https://thumbnails.roblox.com/v1/assets?assetIds=" .. assetId .. "&size=420x420&format=Png&isCircular=false"
+	local success, response = pcall(game.HttpGet, game, url)
+	if success then
+		local data = HttpService:JSONDecode(response)
+		if data and data.data and data.data[1] and data.data[1].imageUrl then
+			return data.data[1].imageUrl
+		end
+	end
+	return nil
+end
+
+local function sendFishWebhook(fishName, rarityText, assetId, itemId, variantId)
+	if not webhookPath or webhookPath == "" then return end
+	local WebhookURL = "https://discord.com/api/webhooks/" .. webhookPath
+	local username = player.DisplayName
+	local imageUrl = GetRobloxImage(assetId)
+	if not imageUrl then return end
+
+	local caught = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Caught")
+	local rarest = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Rarest Fish")
+
+	local basePrice = (FishDataById[itemId] and FishDataById[itemId].SellPrice or 0) * (VariantsByName[variantId] or 1)
+
+	local data = {
+		["username"] = "e-Fishery",
+		["embeds"] = {{
+			["title"] = "Fish Caught!",
+			["description"] = string.format("Player **%s** caught a **%s** (%s)!", username, fishName, rarityText),
+			["color"] = tonumber("0x00bfff"),
+			["image"] = { ["url"] = imageUrl },
+            ["fields"] = {
+                { name = "Sell Price", value = tostring(basePrice), inline = true},
+                { name = "Total Caught", value = tostring(caught and caught.Value or "N/A"), inline = true},
+                { name = "Rarest Fish", value = tostring(rarest and rarest.Value or "N/A"), inline = true},
+            },
+			["footer"] = { ["text"] = "e-Fishery Notifier | " .. os.date("%H:%M:%S") }
+		}}
+	}
+    
+    local requestFunc = syn and syn.request or http and http.request or http_request or request or fluxus and fluxus.request
+	if requestFunc then
+		requestFunc({ Url = WebhookURL, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode(data) })
+	end
+end
+
+local LastCatchData = {}
+local REObtainedNewFishNotification = getNetFolder() and getNetFolder():FindFirstChild("RE/ObtainedNewFishNotification")
+if REObtainedNewFishNotification then
+    REObtainedNewFishNotification.OnClientEvent:Connect(function(itemId, _, data)
+        if data and data.InventoryItem and data.InventoryItem.Metadata then
+            LastCatchData.ItemId = itemId
+            LastCatchData.VariantId = data.InventoryItem.Metadata.VariantId
+        end
+    end)
+end
+
+pcall(function()
+    local guiNotif = player.PlayerGui:WaitForChild("Small Notification"):WaitForChild("Display"):WaitForChild("Container")
+	local fishText = guiNotif:WaitForChild("ItemName")
+	local rarityText = guiNotif:WaitForChild("Rarity")
+	local imageFrame = player.PlayerGui["Small Notification"]:WaitForChild("Display"):WaitForChild("VectorFrame"):WaitForChild("Vector")
+
+	fishText:GetPropertyChangedSignal("Text"):Connect(function()
+        task.wait(0.1) -- wait for rarity to update
+		local fishName, rarity = fishText.Text, rarityText.Text
+		if isTargetFish(fishName, rarity) then
+			local assetId = string.match(imageFrame.Image, "%d+")
+			if assetId then
+				sendFishWebhook(fishName, rarity, assetId, LastCatchData.ItemId, LastCatchData.VariantId)
+			end
+		end
+	end)
+end)
