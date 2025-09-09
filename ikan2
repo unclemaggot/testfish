@@ -356,16 +356,17 @@ end
 ----- =======[ FISH NOTIF TAB ]
 -------------------------------------------
 
--- NEW: Saving and loading functionality
 local savedData = { webhookKey = "" }
 local file_name = "e_fishery_config.json"
 
 local function saveConfig()
-    writefile(file_name, HttpService:JSONEncode(savedData))
+    if writefile then
+        writefile(file_name, HttpService:JSONEncode(savedData))
+    end
 end
 
 local function loadConfig()
-    if isfile(file_name) then
+    if isfile and isfile(file_name) then
         local success, data = pcall(function()
             return HttpService:JSONDecode(readfile(file_name))
         end)
@@ -375,7 +376,7 @@ local function loadConfig()
     end
 end
 
-loadConfig() -- Load the config when the script starts
+loadConfig()
 
 local webhookPath = savedData.webhookKey
 
@@ -400,7 +401,7 @@ FishNotif:Input({
     Title = "Webhook Key",
     Desc = "Input your Discord webhook key here! It will be saved automatically.",
     Placeholder = "Enter Key....",
-    Default = savedData.webhookKey, -- Set the input's default to the loaded key
+    Default = savedData.webhookKey,
     Callback = function(text)
         if text == "" then
             webhookPath = nil
@@ -481,7 +482,6 @@ local function sendFishWebhook(fishName, rarityText, assetId, itemId, variantId)
 
 	local caught = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Caught")
 	local rarest = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Rarest Fish")
-
 	local basePrice = (FishDataById[itemId] and FishDataById[itemId].SellPrice or 0) * (VariantsByName[variantId] or 1)
 
 	local data = {
@@ -506,15 +506,58 @@ local function sendFishWebhook(fishName, rarityText, assetId, itemId, variantId)
 	end
 end
 
+-- NEW: Helper function to get the player's avatar
+local function GetPlayerAvatarUrl(userId)
+    local url = "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=" .. userId .. "&size=420x420&format=Png"
+    local success, response = pcall(game.HttpGet, game, url)
+    if success then
+        local data = HttpService:JSONDecode(response)
+        if data and data.data and data.data[1] and data.data[1].imageUrl then
+            return data.data[1].imageUrl
+        end
+    end
+    return nil
+end
+
+-- NEW: A dedicated function for sending the test webhook with the player's avatar
+local function sendTestWebhook()
+    if not webhookPath or webhookPath == "" then return end
+    
+    local avatarUrl = GetPlayerAvatarUrl(player.UserId)
+    if not avatarUrl then
+        NotifyError("Avatar Fetch Failed", "Could not get your avatar image from Roblox.")
+        return
+    end
+
+    local WebhookURL = "https://discord.com/api/webhooks/" .. webhookPath
+    local data = {
+        ["username"] = "e-Fishery",
+        ["embeds"] = {{
+            ["title"] = "Webhook Test Successful!",
+            ["description"] = string.format("This is a test message for **%s**.", player.DisplayName),
+            ["color"] = tonumber("0x28a745"), -- Green color for success
+            ["thumbnail"] = { ["url"] = avatarUrl },
+            ["footer"] = { ["text"] = "e-Fishery Notifier | " .. os.date("%I:%M:%S %p", os.time()) }
+        }}
+    }
+
+    local requestFunc = syn and syn.request or http and http.request or http_request or request or fluxus and fluxus.request
+	if requestFunc then
+		requestFunc({ Url = WebhookURL, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode(data) })
+        NotifySuccess("Test Sent!", "Check your Discord channel for the test message.")
+	end
+end
+
+-- MODIFIED: The test button now uses the new avatar functionality
 FishNotif:Button({
-    Title = "Test Webhook",
+    Title = "Test Webhook (With Avatar)",
     Callback = function()
         if not webhookPath or webhookPath == "" then
             NotifyWarning("No Webhook", "Please enter a valid webhook key first.")
             return
         end
-        NotifyInfo("Webhook Test", "Sending a test message to your webhook...")
-        sendFishWebhook("Webhook Test Fish", "Test Rarity", "13182627933", nil, nil)
+        NotifyInfo("Webhook Test", "Fetching your avatar and sending test...")
+        sendTestWebhook()
     end
 })
 
