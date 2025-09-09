@@ -355,6 +355,72 @@ for name, pos in pairs(island_locations) do
         end
     })
 end
+-- =========================
+-- EPIC+ FISH WEBHOOK NOTIFICATION
+-- =========================
+
+local REObtainedNewFishNotification = game:GetService("ReplicatedStorage")
+    :WaitForChild("Packages")
+    :WaitForChild("_Index")
+    :WaitForChild("sleitnick_net@0.2.0")
+    :WaitForChild("net")
+    :WaitForChild("RE/ObtainedNewFishNotification")
+
+-- Simple rarity filter (Epic+)
+local RarityOrder = {
+    ["Common"] = 1,
+    ["Uncommon"] = 2,
+    ["Rare"] = 3,
+    ["Epic"] = 4,
+    ["Legendary"] = 5,
+    ["Mythic"] = 6,
+    ["Secret"] = 7
+}
+
+REObtainedNewFishNotification.OnClientEvent:Connect(function(fishData)
+    if not FishWebhookEnabled or not webhookPath or webhookPath == "" then return end
+
+    local name = fishData.Name or "Unknown Fish"
+    local rarity = fishData.Rarity or "Unknown"
+
+    -- only send if Epic+
+    if RarityOrder[rarity] and RarityOrder[rarity] >= 4 then
+        local username = LocalPlayer.DisplayName
+        local userId = LocalPlayer.UserId
+        local avatarUrl = string.format(
+            "https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=420&height=420&format=png",
+            userId
+        )
+
+        local WebhookURL = "https://discord.com/api/webhooks/" .. webhookPath
+        local data = {
+            ["username"] = "FishBot",
+            ["embeds"] = {{
+                ["title"] = "🎣 Epic+ Fish Caught!",
+                ["description"] = string.format([[
+Hei **%s**! 🎣  
+You just caught a **%s**!
+
+🧾 Name : **%s**  
+🌟 Rarity : **%s**
+]], username, name, name, rarity),
+                ["color"] = tonumber("0x8000ff"), -- purple for epic+
+                ["thumbnail"] = { ["url"] = avatarUrl },
+                ["footer"] = { ["text"] = "Fish Notification • " .. os.date("%d %B %Y, %H:%M:%S") }
+            }}
+        }
+
+        local requestFunc = syn and syn.request or http and http.request or http_request or request or fluxus and fluxus.request
+        if requestFunc then
+            requestFunc({
+                Url = WebhookURL,
+                Method = "POST",
+                Headers = { ["Content-Type"] = "application/json" },
+                Body = HttpService:JSONEncode(data)
+            })
+        end
+    end
+end)
 
 -------------------------------------------
 ----- =======[ FISH NOTIFICATION FEATURE ]
@@ -480,3 +546,4 @@ You have successfully caught a fish.
         end
     end
 })
+
