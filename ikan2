@@ -187,7 +187,7 @@ local function startAutoFish()
             end)
 
             local t = os.clock()
-            while os.clock() - t < 0.7 and state.AutoFish do task.wait() end -- delay 0.7s
+            while os.clock() - t < 0.7 and state.AutoFish do task.wait() end
         end
     end)
 end
@@ -356,7 +356,28 @@ end
 ----- =======[ FISH NOTIF TAB ]
 -------------------------------------------
 
-local webhookPath = nil
+-- NEW: Saving and loading functionality
+local savedData = { webhookKey = "" }
+local file_name = "e_fishery_config.json"
+
+local function saveConfig()
+    writefile(file_name, HttpService:JSONEncode(savedData))
+end
+
+local function loadConfig()
+    if isfile(file_name) then
+        local success, data = pcall(function()
+            return HttpService:JSONDecode(readfile(file_name))
+        end)
+        if success and type(data) == "table" then
+            savedData = data
+        end
+    end
+end
+
+loadConfig() -- Load the config when the script starts
+
+local webhookPath = savedData.webhookKey
 
 FishNotif:Paragraph({
 	Title = "Fish Notification",
@@ -377,27 +398,47 @@ end
 
 FishNotif:Input({
     Title = "Webhook Key",
-    Desc = "Input your Discord webhook key here!",
+    Desc = "Input your Discord webhook key here! It will be saved automatically.",
     Placeholder = "Enter Key....",
+    Default = savedData.webhookKey, -- Set the input's default to the loaded key
     Callback = function(text)
-		if text == "" then return end
-        webhookPath = text
-        local isValid, result = validateWebhook(webhookPath)
+        if text == "" then
+            webhookPath = nil
+            savedData.webhookKey = ""
+            saveConfig()
+            NotifyInfo("Webhook Cleared", "Fish notifications are now disabled.")
+            return
+        end
+
+        local isValid, result = validateWebhook(text)
         if isValid then
-            NotifySuccess("Key Valid", "Channel ID: " .. tostring(result))
+            webhookPath = text
+            savedData.webhookKey = text
+            saveConfig()
+            NotifySuccess("Webhook Set & Saved", "Channel ID: " .. tostring(result) .. ". Fish notifications are active!")
         else
-            NotifyError("Key Invalid", tostring(result))
+            webhookPath = nil
+            NotifyError("Key Invalid", tostring(result) .. ". Please try again.")
         end
     end
 })
 
 local FishDataById, VariantsByName, SelectedCategories = {}, {}, {}
+local rarityMap = {
+    [1] = "Common", [2] = "Uncommon", [3] = "Rare", [4] = "Epic",
+    [5] = "Legendary", [6] = "Mythic", [7] = "Secret"
+}
 
 pcall(function()
     for _, item in ipairs(ReplicatedStorage.Items:GetChildren()) do
         local ok, data = pcall(require, item)
         if ok and data.Data and data.Data.Type == "Fishes" then
-            FishDataById[data.Data.Id] = { Name = data.Data.Name, SellPrice = data.SellPrice or 0 }
+            FishDataById[data.Data.Id] = {
+                Name = data.Data.Name,
+                SellPrice = data.SellPrice or 0,
+                Tier = data.Data.Tier,
+                Icon = data.IconId or data.Data.Icon or ""
+            }
         end
     end
     for _, v in ipairs(ReplicatedStorage.Variants:GetChildren()) do
@@ -418,15 +459,6 @@ FishNotif:Dropdown({
 		SelectedCategories = selected
 	end
 })
-
-local function isTargetFish(fishName, rarity)
-    for _, category in pairs(SelectedCategories) do
-        if string.find(string.lower(rarity), string.lower(category)) then
-            return true
-        end
-    end
-    return false
-end
 
 local function GetRobloxImage(assetId)
 	local url = "https://thumbnails.roblox.com/v1/assets?assetIds=" .. assetId .. "&size=420x420&format=Png&isCircular=false"
@@ -474,53 +506,46 @@ local function sendFishWebhook(fishName, rarityText, assetId, itemId, variantId)
 	end
 end
 
--- NEW: Added a test button for the webhook
 FishNotif:Button({
     Title = "Test Webhook",
     Callback = function()
         if not webhookPath or webhookPath == "" then
-            NotifyWarning("No Webhook", "Please enter your webhook key before testing.")
+            NotifyWarning("No Webhook", "Please enter a valid webhook key first.")
             return
         end
-
         NotifyInfo("Webhook Test", "Sending a test message to your webhook...")
-        
-        -- Call the send function with placeholder test data
-        sendFishWebhook(
-            "Webhook Test Fish", -- fishName
-            "Test Rarity",       -- rarityText
-            "13182627933",       -- assetId (a generic checkmark icon)
-            nil,                 -- itemId (nil is safe for price calculation)
-            nil                  -- variantId (nil is safe for price calculation)
-        )
+        sendFishWebhook("Webhook Test Fish", "Test Rarity", "13182627933", nil, nil)
     end
 })
 
-local LastCatchData = {}
 local REObtainedNewFishNotification = getNetFolder() and getNetFolder():FindFirstChild("RE/ObtainedNewFishNotification")
 if REObtainedNewFishNotification then
-    REObtainedNewFishNotification.OnClientEvent:Connect(function(itemId, _, data)
-        if data and data.InventoryItem and data.InventoryItem.Metadata then
-            LastCatchData.ItemId = itemId
-            LastCatchData.VariantId = data.InventoryItem.Metadata.VariantId
-        end
+    REObtainedNewFishNotification.OnClientEvent:Connect(function(itemId, _, eventData)
+        if not webhookPath or webhookPath == "" then return end
+
+        pcall(function()
+            local fishInfo = FishDataById[itemId]
+            if not fishInfo then return end
+
+            local rarityName = rarityMap[fishInfo.Tier] or "Unknown Rarity"
+            
+            local isTarget = false
+            for _, category in pairs(SelectedCategories) do
+                if string.lower(category) == string.lower(rarityName) then
+                    isTarget = true
+                    break
+                end
+            end
+
+            if isTarget then
+                local assetId = string.match(fishInfo.Icon or "", "%d+")
+                if not assetId then return end
+                
+                local fishName = fishInfo.Name
+                local variantId = eventData and eventData.InventoryItem and eventData.InventoryItem.Metadata and eventData.InventoryItem.Metadata.VariantId
+                
+                sendFishWebhook(fishName, rarityName, assetId, itemId, variantId)
+            end
+        end)
     end)
 end
-
-pcall(function()
-    local guiNotif = player.PlayerGui:WaitForChild("Small Notification"):WaitForChild("Display"):WaitForChild("Container")
-	local fishText = guiNotif:WaitForChild("ItemName")
-	local rarityText = guiNotif:WaitForChild("Rarity")
-	local imageFrame = player.PlayerGui["Small Notification"]:WaitForChild("Display"):WaitForChild("VectorFrame"):WaitForChild("Vector")
-
-	fishText:GetPropertyChangedSignal("Text"):Connect(function()
-        task.wait(0.1) -- wait for rarity to update
-		local fishName, rarity = fishText.Text, rarityText.Text
-		if isTargetFish(fishName, rarity) then
-			local assetId = string.match(imageFrame.Image, "%d+")
-			if assetId then
-				sendFishWebhook(fishName, rarity, assetId, LastCatchData.ItemId, LastCatchData.VariantId)
-			end
-		end
-	end)
-end)
