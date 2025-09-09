@@ -504,56 +504,7 @@ local function sendFishWebhook(fishName, rarityText, assetId, itemId, variantId)
 	end
 end
 
-local function GetPlayerAvatarUrl(userId)
-    local url = "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=" .. userId .. "&size=420x420&format=Png"
-    local success, response = pcall(game.HttpGet, game, url)
-    if success then
-        local data = HttpService:JSONDecode(response)
-        if data and data.data and data.data[1] and data.data[1].imageUrl then
-            return data.data[1].imageUrl
-        end
-    end
-    return nil
-end
-
-local function sendTestWebhook()
-    if not webhookUrl or webhookUrl == "" then return end
-    
-    local avatarUrl = GetPlayerAvatarUrl(player.UserId)
-    if not avatarUrl then
-        NotifyError("Avatar Fetch Failed", "Could not get your avatar image from Roblox.")
-        return
-    end
-
-    local data = {
-        ["username"] = "e-Fishery",
-        ["embeds"] = {{
-            ["title"] = "Webhook Test Successful!",
-            ["description"] = string.format("This is a test message for **%s**.", player.DisplayName),
-            ["color"] = tonumber("0x28a745"),
-            ["thumbnail"] = { ["url"] = avatarUrl },
-            ["footer"] = { ["text"] = "e-Fishery Notifier | " .. os.date("%I:%M:%S %p", os.time()) }
-        }}
-    }
-
-    local requestFunc = syn and syn.request or http and http.request or http_request or request or fluxus and fluxus.request
-	if requestFunc then
-		requestFunc({ Url = webhookUrl, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode(data) })
-        NotifySuccess("Test Sent!", "Check your Discord channel for the test message.")
-	end
-end
-
-FishNotif:Button({
-    Title = "Test Webhook (With Avatar)",
-    Callback = function()
-        if not webhookUrl or webhookUrl == "" then
-            NotifyWarning("No Webhook", "Please enter a valid webhook URL first.")
-            return
-        end
-        NotifyInfo("Webhook Test", "Fetching your avatar and sending test...")
-        sendTestWebhook()
-    end
-})
+-- The test webhook button and its helper functions have been removed.
 
 local REObtainedNewFishNotification = getNetFolder() and getNetFolder():FindFirstChild("RE/ObtainedNewFishNotification")
 if REObtainedNewFishNotification then
