@@ -83,7 +83,7 @@ end
 -- =========================
 local fpsBoostActive = false
 local function activateFpsBoost()
-    if fpsBoostActive then return end
+    if fpsBoostActive then return end 
 
     pcall(function()
         for _, v in pairs(game:GetDescendants()) do
@@ -110,6 +110,7 @@ local function activateFpsBoost()
     NotifyInfo("Performance", "FPS Boost activated for smooth farming.")
     fpsBoostActive = true
 end
+
 
 -- =========================
 -- AUTO FAVOURITE
@@ -255,11 +256,11 @@ end
 local Window = WindUI:CreateWindow({
     Title = "e-Fishery V1",
     Icon = "shrimp",
-    Author = "by Heyji",
+    Author = "by Zee (WindUI Edition)",
     Folder = "e-Fishery",
     Size = UDim2.fromOffset(600, 400),
     Transparent = true,
-    Theme = "Dark",
+    Theme = "Dark", -- REVERTED: Changed back to "Dark" for stability
     KeySystem = false,
     ScrollBarEnabled = true,
     HideSearchBar = true,
@@ -291,7 +292,7 @@ local Main = Window:Tab({ Title = "Main", Icon = "toggle-right" })
 local AutoFarm = Window:Tab({ Title = "Auto Farm", Icon = "map" })
 local FishNotif = Window:Tab({ Title = "Fish Notification", Icon = "bell-ring" })
 
-Home:Select() -- Set the default tab to Developer Info
+-- REVERTED: Removed the explicit tab selection to prevent rendering issues
 
 -------------------------------------------
 ----- =======[ HOME / DEVELOPER INFO TAB ]
@@ -339,7 +340,7 @@ autoFishToggle = Main:Toggle({
 })
 
 Main:Toggle({
-    Title = "Auto Favourite",
+    Title = "Auto Favorite",
     Callback = function(Value)
         state.AutoFavourite = Value
         if Value then startAutoFavourite() end
