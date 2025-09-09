@@ -356,7 +356,7 @@ end
 ----- =======[ FISH NOTIF TAB ]
 -------------------------------------------
 
-local savedData = { webhookKey = "" }
+local savedData = { webhookUrl = "" }
 local file_name = "e_fishery_config.json"
 
 local function saveConfig()
@@ -378,18 +378,17 @@ end
 
 loadConfig()
 
-local webhookPath = savedData.webhookKey
+local webhookUrl = savedData.webhookUrl
 
 FishNotif:Paragraph({
 	Title = "Fish Notification",
 	Color = "Green",
-	Desc = [[This feature sends a notification to Discord when you catch a rare fish. Enter a webhook key to connect to your channel.]]
+	Desc = [[This feature sends a notification to Discord when you catch a rare fish. Enter your full webhook URL to connect to your channel.]]
 })
 
-local function validateWebhook(path)
-	if not path or path == "" then return false, "Key is empty" end
-	if not path:match("^%d+/.+") then return false, "Invalid format" end
-	local url = "https://discord.com/api/webhooks/" .. path
+local function validateWebhook(url)
+	if not url or url == "" then return false, "URL is empty" end
+	if not url:match("^https://discord.com/api/webhooks/%d+/.+") then return false, "Invalid Discord webhook URL format." end
 	local success, response = pcall(game.HttpGet, game, url)
 	if not success then return false, "Failed to connect to Discord" end
 	local ok, data = pcall(HttpService.JSONDecode, HttpService, response)
@@ -398,14 +397,14 @@ local function validateWebhook(path)
 end
 
 FishNotif:Input({
-    Title = "Webhook Key",
-    Desc = "Input your Discord webhook key here! It will be saved automatically.",
-    Placeholder = "Enter Key....",
-    Default = savedData.webhookKey,
+    Title = "Webhook URL",
+    Desc = "Paste your full Discord webhook URL here! It will be saved automatically.",
+    Placeholder = "https://discord.com/api/webhooks/...",
+    Default = savedData.webhookUrl,
     Callback = function(text)
         if text == "" then
-            webhookPath = nil
-            savedData.webhookKey = ""
+            webhookUrl = nil
+            savedData.webhookUrl = ""
             saveConfig()
             NotifyInfo("Webhook Cleared", "Fish notifications are now disabled.")
             return
@@ -413,13 +412,13 @@ FishNotif:Input({
 
         local isValid, result = validateWebhook(text)
         if isValid then
-            webhookPath = text
-            savedData.webhookKey = text
+            webhookUrl = text
+            savedData.webhookUrl = text
             saveConfig()
             NotifySuccess("Webhook Set & Saved", "Channel ID: " .. tostring(result) .. ". Fish notifications are active!")
         else
-            webhookPath = nil
-            NotifyError("Key Invalid", tostring(result) .. ". Please try again.")
+            webhookUrl = nil
+            NotifyError("URL Invalid", tostring(result) .. ". Please paste the full, valid URL.")
         end
     end
 })
@@ -474,8 +473,7 @@ local function GetRobloxImage(assetId)
 end
 
 local function sendFishWebhook(fishName, rarityText, assetId, itemId, variantId)
-	if not webhookPath or webhookPath == "" then return end
-	local WebhookURL = "https://discord.com/api/webhooks/" .. webhookPath
+	if not webhookUrl or webhookUrl == "" then return end
 	local username = player.DisplayName
 	local imageUrl = GetRobloxImage(assetId)
 	if not imageUrl then return end
@@ -502,11 +500,10 @@ local function sendFishWebhook(fishName, rarityText, assetId, itemId, variantId)
     
     local requestFunc = syn and syn.request or http and http.request or http_request or request or fluxus and fluxus.request
 	if requestFunc then
-		requestFunc({ Url = WebhookURL, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode(data) })
+		requestFunc({ Url = webhookUrl, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode(data) })
 	end
 end
 
--- NEW: Helper function to get the player's avatar
 local function GetPlayerAvatarUrl(userId)
     local url = "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=" .. userId .. "&size=420x420&format=Png"
     local success, response = pcall(game.HttpGet, game, url)
@@ -519,9 +516,8 @@ local function GetPlayerAvatarUrl(userId)
     return nil
 end
 
--- NEW: A dedicated function for sending the test webhook with the player's avatar
 local function sendTestWebhook()
-    if not webhookPath or webhookPath == "" then return end
+    if not webhookUrl or webhookUrl == "" then return end
     
     local avatarUrl = GetPlayerAvatarUrl(player.UserId)
     if not avatarUrl then
@@ -529,13 +525,12 @@ local function sendTestWebhook()
         return
     end
 
-    local WebhookURL = "https://discord.com/api/webhooks/" .. webhookPath
     local data = {
         ["username"] = "e-Fishery",
         ["embeds"] = {{
             ["title"] = "Webhook Test Successful!",
             ["description"] = string.format("This is a test message for **%s**.", player.DisplayName),
-            ["color"] = tonumber("0x28a745"), -- Green color for success
+            ["color"] = tonumber("0x28a745"),
             ["thumbnail"] = { ["url"] = avatarUrl },
             ["footer"] = { ["text"] = "e-Fishery Notifier | " .. os.date("%I:%M:%S %p", os.time()) }
         }}
@@ -543,17 +538,16 @@ local function sendTestWebhook()
 
     local requestFunc = syn and syn.request or http and http.request or http_request or request or fluxus and fluxus.request
 	if requestFunc then
-		requestFunc({ Url = WebhookURL, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode(data) })
+		requestFunc({ Url = webhookUrl, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode(data) })
         NotifySuccess("Test Sent!", "Check your Discord channel for the test message.")
 	end
 end
 
--- MODIFIED: The test button now uses the new avatar functionality
 FishNotif:Button({
     Title = "Test Webhook (With Avatar)",
     Callback = function()
-        if not webhookPath or webhookPath == "" then
-            NotifyWarning("No Webhook", "Please enter a valid webhook key first.")
+        if not webhookUrl or webhookUrl == "" then
+            NotifyWarning("No Webhook", "Please enter a valid webhook URL first.")
             return
         end
         NotifyInfo("Webhook Test", "Fetching your avatar and sending test...")
@@ -564,7 +558,7 @@ FishNotif:Button({
 local REObtainedNewFishNotification = getNetFolder() and getNetFolder():FindFirstChild("RE/ObtainedNewFishNotification")
 if REObtainedNewFishNotification then
     REObtainedNewFishNotification.OnClientEvent:Connect(function(itemId, _, eventData)
-        if not webhookPath or webhookPath == "" then return end
+        if not webhookUrl or webhookUrl == "" then return end
 
         pcall(function()
             local fishInfo = FishDataById[itemId]
