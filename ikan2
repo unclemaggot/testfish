@@ -140,8 +140,12 @@ local function startAutoSell()
 end
 
 -- =========================
--- AUTO FISH V3 (New Logic)
+-- AUTO FISH V4 (Configurable)
 -- =========================
+
+-- Adjust this to control fishing speed (in seconds per cycle)
+local FISH_DELAY = 4 -- recommended: 4 (safe), 3 (faster), 5+ (extra safe)
+
 local autoFishLoop
 local function playCastAnim()
     pcall(function()
@@ -162,26 +166,31 @@ local function startAutoFish()
 
         while state.AutoFish do
             if FishingController and FishingController.OnCooldown and FishingController:OnCooldown() then
-                repeat task.wait(0.2) until not (FishingController:OnCooldown()) or not state.AutoFish
+                repeat task.wait(0.3) until not (FishingController:OnCooldown()) or not state.AutoFish
             end
             if not state.AutoFish then break end
 
             pcall(function()
                 playCastAnim()
                 equipEvent:FireServer(1)
-                task.wait(0.1)
+                task.wait(0.3)
+
                 chargeFunc:InvokeServer(workspace:GetServerTimeNow())
-                task.wait(0.1)
+                task.wait(0.5)
+
                 startMini:InvokeServer(-0.75, 1)
-                task.wait(0.2)
-                for i=1,20 do
+                task.wait(1)
+
+                -- Completion firing depends on speed (scaled)
+                local completeCount = math.max(5, math.floor(FISH_DELAY * 2))
+                for i = 1, completeCount do
                     complete:FireServer()
-                    task.wait(0.05)
+                    task.wait(FISH_DELAY / (completeCount * 2)) 
                 end
             end)
 
-            local t = os.clock()
-            while os.clock() - t < 0.7 and state.AutoFish do task.wait() end -- delay 0.7s
+            -- Final cooldown before next cast
+            task.wait(FISH_DELAY / 2)
         end
     end)
 end
