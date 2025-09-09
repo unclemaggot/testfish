@@ -13,7 +13,19 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
-
+local Notifs = {
+	WBN = true,
+	UniVBlockNotif = true,
+	AcceptBN = true,
+	TradeblockNotif = true,
+	AutoTBlockNotif = true,
+	floatBlockNotif = true,
+	FavBlockNotif = true,
+	FishBlockNotif = true,
+	DelayBlockNotif = true,
+	AFKBN = true,
+	APIBN = true
+}
 -- Safe require helper from Rayfield version
 local function safeRequire(pathTbl)
     local ptr = ReplicatedStorage
