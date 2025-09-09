@@ -53,14 +53,33 @@ local state = {
     AutoFish = false,
     AutoFavourite = false,
     AutoSell = false,
-    AutoSellThreshold = 60,
 }
 
 -- Include Epic, Legendary, Mythic, Secret fish
 local allowedTiers = { [4]=true, [5]=true, [6]=true, [7]=true }
 
+-------------------------------------------
+----- =======[ NOTIFY FUNCTION ]
+-------------------------------------------
+
+local function NotifySuccess(title, message, duration)
+    WindUI:Notify({ Title = title, Content = message, Duration = duration or 5, Icon = "circle-check" })
+end
+
+local function NotifyError(title, message, duration)
+    WindUI:Notify({ Title = title, Content = message, Duration = duration or 5, Icon = "ban" })
+end
+
+local function NotifyInfo(title, message, duration)
+    WindUI:Notify({ Title = title, Content = message, Duration = duration or 5, Icon = "info" })
+end
+
+local function NotifyWarning(title, message, duration)
+    WindUI:Notify({ Title = title, Content = message, Duration = duration or 5, Icon = "triangle-alert" })
+end
+
 -- =========================
--- AUTO FAVOURITE (FIXED LOGIC)
+-- AUTO FAVOURITE
 -- =========================
 local function startAutoFavourite()
     task.spawn(function()
@@ -77,9 +96,7 @@ local function startAutoFavourite()
                 for _, item in ipairs(items) do
                     local base = ItemUtility:GetItemData(item.Id)
                     if base and base.Data and allowedTiers[base.Data.Tier] and not item.Favorited then
-                        -- Fire the remote event to tell the server to favorite the item
                         favoriteRemote:FireServer(item.UUID)
-                        -- Also update the local state to prevent re-sending
                         item.Favorited = true
                     end
                 end
@@ -90,10 +107,11 @@ local function startAutoFavourite()
 end
 
 -- =========================
--- AUTO SELL (MODIFIED LOGIC)
+-- AUTO SELL
 -- =========================
 local lastSellTime = 0
-local AUTO_SELL_DELAY = 60 -- Minimum seconds between sells
+local AUTO_SELL_THRESHOLD = 60
+local AUTO_SELL_DELAY = 60 
 
 local function startAutoSell()
     task.spawn(function()
@@ -111,7 +129,7 @@ local function startAutoSell()
                     end
                 end
 
-                if unfavoritedCount >= state.AutoSellThreshold and os.time() - lastSellTime >= AUTO_SELL_DELAY then
+                if unfavoritedCount >= AUTO_SELL_THRESHOLD and os.time() - lastSellTime >= AUTO_SELL_DELAY then
                     local netFolder = getNetFolder()
                     if netFolder then
                         local sellFunc = netFolder:FindFirstChild("RF/SellAllItems")
@@ -122,13 +140,13 @@ local function startAutoSell()
                     end
                 end
             end)
-            task.wait(10) -- check every 10 seconds
+            task.wait(10)
         end
     end)
 end
 
 -- =========================
--- AUTO FISH V3 (New Logic)
+-- AUTO FISH V3
 -- =========================
 local autoFishLoop
 local function playCastAnim()
@@ -179,7 +197,7 @@ local function stopAutoFish()
 end
 
 -- =========================
--- TELEPORT FUNCTION (New Logic)
+-- TELEPORT FUNCTION
 -- =========================
 local function teleportTo(posList)
     local char = player.Character or player.CharacterAdded:Wait()
@@ -195,48 +213,6 @@ local function teleportTo(posList)
         hrp.CFrame = chosen
     end
 end
-
--------------------------------------------
------ =======[ NOTIFY FUNCTION ]
--------------------------------------------
--- NEW: Replaced the old function with this new set
-
-local function NotifySuccess(title, message, duration)
-    WindUI:Notify({
-        Title = title,
-        Content = message,
-        Duration = duration or 5,
-        Icon = "circle-check"
-    })
-end
-
-local function NotifyError(title, message, duration)
-    WindUI:Notify({
-        Title = title,
-        Content = message,
-        Duration = duration or 5,
-        Icon = "ban"
-    })
-end
-
-local function NotifyInfo(title, message, duration)
-    WindUI:Notify({
-        Title = title,
-        Content = message,
-        Duration = duration or 5,
-        Icon = "info"
-    })
-end
-
-local function NotifyWarning(title, message, duration)
-    WindUI:Notify({
-        Title = title,
-        Content = message,
-        Duration = duration or 5,
-        Icon = "triangle-alert"
-    })
-end
-
 
 -------------------------------------------
 ----- =======[ LOAD WINDOW ]
@@ -256,8 +232,7 @@ local Window = WindUI:CreateWindow({
     User = {
         Enabled = true,
         Anonymous = false,
-        Callback = function()
-        end,
+        Callback = function() end,
     }
 })
 
@@ -318,7 +293,7 @@ end
 ----- =======[ MAIN TAB ]
 -------------------------------------------
 
-local autoFishToggle -- Declare variable to hold the toggle object
+local autoFishToggle 
 autoFishToggle = Main:Toggle({
     Title = "Auto Fish",
     Callback = function(Value)
@@ -336,22 +311,10 @@ Main:Toggle({
 })
 
 Main:Toggle({
-    Title = "Auto Sell",
+    Title = "Auto Sell (When inventory is full)",
     Callback = function(Value)
         state.AutoSell = Value
         if Value then startAutoSell() end
-    end
-})
-
-Main:Slider({
-    Title = "Auto-Sell Threshold",
-    Desc = "Automatically sells non-favorited items when the count exceeds this value.",
-    Min = 10,
-    Max = 200,
-    Default = 60,
-    Float = 0, -- Use whole numbers
-    Callback = function(Value)
-        state.AutoSellThreshold = Value
     end
 })
 
@@ -420,7 +383,6 @@ FishNotif:Input({
 		if text == "" then return end
         webhookPath = text
         local isValid, result = validateWebhook(webhookPath)
-        -- UPDATED: Use new notification functions
         if isValid then
             NotifySuccess("Key Valid", "Channel ID: " .. tostring(result))
         else
@@ -429,7 +391,6 @@ FishNotif:Input({
     end
 })
 
-local FishCategories = { ["Secret"]={}, ["Mythic"]={}, ["Legendary"]={}, ["Epic"]={} }
 local FishDataById, VariantsByName, SelectedCategories = {}, {}, {}
 
 pcall(function()
@@ -503,7 +464,7 @@ local function sendFishWebhook(fishName, rarityText, assetId, itemId, variantId)
                 { name = "Total Caught", value = tostring(caught and caught.Value or "N/A"), inline = true},
                 { name = "Rarest Fish", value = tostring(rarest and rarest.Value or "N/A"), inline = true},
             },
-			["footer"] = { ["text"] = "e-Fishery Notifier | " .. os.date("%H:%M:%S") }
+			["footer"] = { ["text"] = "e-Fishery Notifier | " .. os.date("%I:%M:%S %p", os.time()) }
 		}}
 	}
     
@@ -512,6 +473,28 @@ local function sendFishWebhook(fishName, rarityText, assetId, itemId, variantId)
 		requestFunc({ Url = WebhookURL, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode(data) })
 	end
 end
+
+-- NEW: Added a test button for the webhook
+FishNotif:Button({
+    Title = "Test Webhook",
+    Callback = function()
+        if not webhookPath or webhookPath == "" then
+            NotifyWarning("No Webhook", "Please enter your webhook key before testing.")
+            return
+        end
+
+        NotifyInfo("Webhook Test", "Sending a test message to your webhook...")
+        
+        -- Call the send function with placeholder test data
+        sendFishWebhook(
+            "Webhook Test Fish", -- fishName
+            "Test Rarity",       -- rarityText
+            "13182627933",       -- assetId (a generic checkmark icon)
+            nil,                 -- itemId (nil is safe for price calculation)
+            nil                  -- variantId (nil is safe for price calculation)
+        )
+    end
+})
 
 local LastCatchData = {}
 local REObtainedNewFishNotification = getNetFolder() and getNetFolder():FindFirstChild("RE/ObtainedNewFishNotification")
