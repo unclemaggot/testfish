@@ -83,7 +83,7 @@ end
 -- =========================
 local fpsBoostActive = false
 local function activateFpsBoost()
-    if fpsBoostActive then return end 
+    if fpsBoostActive then return end
 
     pcall(function()
         for _, v in pairs(game:GetDescendants()) do
@@ -110,7 +110,6 @@ local function activateFpsBoost()
     NotifyInfo("Performance", "FPS Boost activated for smooth farming.")
     fpsBoostActive = true
 end
-
 
 -- =========================
 -- AUTO FAVOURITE
@@ -260,7 +259,7 @@ local Window = WindUI:CreateWindow({
     Folder = "e-Fishery",
     Size = UDim2.fromOffset(600, 400),
     Transparent = true,
-    Theme = "Light", -- MODIFIED: Changed from "Dark" to "Light"
+    Theme = "Dark",
     KeySystem = false,
     ScrollBarEnabled = true,
     HideSearchBar = true,
@@ -340,7 +339,7 @@ autoFishToggle = Main:Toggle({
 })
 
 Main:Toggle({
-    Title = "Auto Favourite",
+    Title = "Auto Favourite (Epic+)",
     Callback = function(Value)
         state.AutoFavourite = Value
         if Value then startAutoFavourite() end
@@ -348,7 +347,7 @@ Main:Toggle({
 })
 
 Main:Toggle({
-    Title = "Auto Sell",
+    Title = "Auto Sell (When inventory is full)",
     Callback = function(Value)
         state.AutoSell = Value
         if Value then startAutoSell() end
@@ -508,4 +507,68 @@ local function GetRobloxImage(assetId)
 		end
 	end
 	return nil
+end
+
+local function sendFishWebhook(fishName, rarityText, assetId, itemId, variantId)
+	if not webhookUrl or webhookUrl == "" then return end
+	local username = player.DisplayName
+	local imageUrl = GetRobloxImage(assetId)
+	if not imageUrl then return end
+
+	local caught = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Caught")
+	local rarest = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Rarest Fish")
+	local basePrice = (FishDataById[itemId] and FishDataById[itemId].SellPrice or 0) * (VariantsByName[variantId] or 1)
+
+	local data = {
+		["username"] = "e-Fishery",
+		["embeds"] = {{
+			["title"] = "Fish Caught!",
+			["description"] = string.format("Player **%s** caught a **%s** (%s)!", username, fishName, rarityText),
+			["color"] = tonumber("0x00bfff"),
+			["image"] = { ["url"] = imageUrl },
+            ["fields"] = {
+                { name = "Sell Price", value = tostring(basePrice), inline = true},
+                { name = "Total Caught", value = tostring(caught and caught.Value or "N/A"), inline = true},
+                { name = "Rarest Fish", value = tostring(rarest and rarest.Value or "N/A"), inline = true},
+            },
+			["footer"] = { ["text"] = "e-Fishery Notifier | " .. os.date("%I:%M:%S %p", os.time()) }
+		}}
+	}
+    
+    local requestFunc = syn and syn.request or http and http.request or http_request or request or fluxus and fluxus.request
+	if requestFunc then
+		requestFunc({ Url = webhookUrl, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode(data) })
+	end
+end
+
+local REObtainedNewFishNotification = getNetFolder() and getNetFolder():FindFirstChild("RE/ObtainedNewFishNotification")
+if REObtainedNewFishNotification then
+    REObtainedNewFishNotification.OnClientEvent:Connect(function(itemId, _, eventData)
+        if not webhookUrl or webhookUrl == "" then return end
+
+        pcall(function()
+            local fishInfo = FishDataById[itemId]
+            if not fishInfo then return end
+
+            local rarityName = rarityMap[fishInfo.Tier] or "Unknown Rarity"
+            
+            local isTarget = false
+            for _, category in pairs(SelectedCategories) do
+                if string.lower(category) == string.lower(rarityName) then
+                    isTarget = true
+                    break
+                end
+            end
+
+            if isTarget then
+                local assetId = string.match(fishInfo.Icon or "", "%d+")
+                if not assetId then return end
+                
+                local fishName = fishInfo.Name
+                local variantId = eventData and eventData.InventoryItem and eventData.InventoryItem.Metadata and eventData.InventoryItem.Metadata.VariantId
+                
+                sendFishWebhook(fishName, rarityName, assetId, itemId, variantId)
+            end
+        end)
+    end)
 end
