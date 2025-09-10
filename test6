@@ -291,7 +291,7 @@ end)
 local Window = WindUI:CreateWindow({
     Title = "e-Fishery V1",
     Icon = "shrimp",
-    Author = "by Zee (WindUI Edition)",
+    Author = "by Heyji (WindUI Edition)",
     Folder = "e-Fishery",
     Size = UDim2.fromOffset(600, 400),
     Transparent = true,
@@ -311,7 +311,7 @@ Window:EditOpenButton({
     Icon = "shrimp",
     CornerRadius = UDim.new(0,19),
     StrokeThickness = 2,
-    Color = ColorSequence.new(Color3.fromHex("9600FF"), Color3.fromHex("AEBAF8")),
+    Color = ColorSequence.new(Color3.fromHex("A75858"), Color3.fromHex("E21D1D")),
     Draggable = true,
 })
 
@@ -417,7 +417,7 @@ autoFishToggle = Main:Toggle({
 })
 
 autoFavouriteToggle = Main:Toggle({
-    Title = "Auto Favourite (Epic+)",
+    Title = "Auto Favourite",
     Callback = function(Value)
         state.AutoFavourite = Value
         if Value then startAutoFavourite() end
@@ -426,7 +426,7 @@ autoFavouriteToggle = Main:Toggle({
 })
 
 autoSellToggle = Main:Toggle({
-    Title = "Auto Sell (When inventory is full)",
+    Title = "Auto Sell",
     Callback = function(Value)
         state.AutoSell = Value
         if Value then startAutoSell() end
