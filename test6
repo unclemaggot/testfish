@@ -354,7 +354,7 @@ local function LookupDiscordInvite(inviteCode)
     return nil
 end
 
-local inviteData = LookupDiscordInvite("muuPtUBV2H")
+local inviteData = LookupDiscordInvite("UyscFN7q7J")
 if inviteData then
     Home:Paragraph({
         Title = string.format("[DISCORD] %s", inviteData.name),
@@ -423,7 +423,7 @@ autoFishToggle = Main:Toggle({
 })
 
 autoFavouriteToggle = Main:Toggle({
-    Title = "Auto Favourite (Epic+)",
+    Title = "Auto Favourite",
     Callback = function(Value)
         state.AutoFavourite = Value
         if Value then startAutoFavourite() end
@@ -432,7 +432,7 @@ autoFavouriteToggle = Main:Toggle({
 })
 
 autoSellToggle = Main:Toggle({
-    Title = "Auto Sell (When inventory is full)",
+    Title = "Auto Sell",
     Callback = function(Value)
         state.AutoSell = Value
         if Value then startAutoSell() end
