@@ -54,7 +54,9 @@ local state = {
     AutoFavourite = false,
     AutoSell = false,
 }
-local lastFarmPosition = nil -- NEW: Stores the last farming location
+local lastFarmPosition = nil 
+local lastCatchTimestamp = 0 -- NEW: For the anti-stuck timer
+local respawnTimerLoop = nil -- NEW: To manage the timer thread
 
 -- Include Epic, Legendary, Mythic, Secret fish
 local allowedTiers = { [4]=true, [5]=true, [6]=true, [7]=true }
@@ -195,6 +197,25 @@ end
 local function startAutoFish()
     activateFpsBoost() 
     if autoFishLoop then task.cancel(autoFishLoop) end
+    if respawnTimerLoop then task.cancel(respawnTimerLoop) end
+
+    lastCatchTimestamp = os.time() -- Start the timer
+
+    -- Start the new anti-stuck timer loop
+    respawnTimerLoop = task.spawn(function()
+        while state.AutoFish do
+            if os.time() - lastCatchTimestamp > 60 then
+                NotifyWarning("Anti-Stuck Triggered", "No fish caught in 1 minute. Resetting character...")
+                if player.Character then
+                    player.Character:BreakJoints()
+                end
+                -- Reset timer to prevent instant re-trigger after respawn
+                lastCatchTimestamp = os.time() 
+            end
+            task.wait(1)
+        end
+    end)
+
     autoFishLoop = task.spawn(function()
         local net = getNetFolder(); if not net then return end
         local equipEvent = net:WaitForChild("RE/EquipToolFromHotbar")
@@ -230,6 +251,7 @@ end
 
 local function stopAutoFish()
     if autoFishLoop then task.cancel(autoFishLoop); autoFishLoop = nil end
+    if respawnTimerLoop then task.cancel(respawnTimerLoop); respawnTimerLoop = nil end
 end
 
 -- =========================
@@ -251,12 +273,10 @@ local function teleportTo(posList)
 end
 
 -------------------------------------------
------ =======[ RESPAWN HANDLER ] (NEW)
+----- =======[ RESPAWN HANDLER ]
 -------------------------------------------
 player.CharacterAdded:Connect(function(character)
-    -- Wait a moment for the character to load properly
     task.wait(2)
-    -- If auto-fish was active and we have a last farm position, teleport back
     if state.AutoFish and lastFarmPosition then
         NotifyInfo("Respawn Detected", "Returning to last farm location...")
         teleportTo(lastFarmPosition)
@@ -271,7 +291,7 @@ end)
 local Window = WindUI:CreateWindow({
     Title = "e-Fishery V1",
     Icon = "shrimp",
-    Author = "by Heyji",
+    Author = "by Zee (WindUI Edition)",
     Folder = "e-Fishery",
     Size = UDim2.fromOffset(600, 400),
     Transparent = true,
@@ -328,7 +348,7 @@ local function LookupDiscordInvite(inviteCode)
     return nil
 end
 
-local inviteData = LookupDiscordInvite("UyscFN7q7J")
+local inviteData = LookupDiscordInvite("muuPtUBV2H")
 if inviteData then
     Home:Paragraph({
         Title = string.format("[DISCORD] %s", inviteData.name),
@@ -340,31 +360,77 @@ if inviteData then
 end
 
 -------------------------------------------
+----- =======[ CONFIG & SAVE/LOAD SYSTEM ]
+-------------------------------------------
+local savedData = {
+    webhookUrl = "",
+    autoFish = false,
+    autoFavourite = false,
+    autoSell = false,
+    webhookCategories = {"Secret"},
+    lastFarmPosition = nil
+}
+local file_name = "e_fishery_session.json"
+local webhookUrl, SelectedCategories
+
+local function saveConfig()
+    if writefile then
+        savedData.webhookUrl = webhookUrl
+        savedData.autoFish = state.AutoFish
+        savedData.autoFavourite = state.AutoFavourite
+        savedData.autoSell = state.AutoSell
+        savedData.webhookCategories = SelectedCategories
+        savedData.lastFarmPosition = lastFarmPosition
+        writefile(file_name, HttpService:JSONEncode(savedData))
+    end
+end
+
+local function loadConfig()
+    if isfile and isfile(file_name) then
+        local success, data = pcall(function()
+            return HttpService:JSONDecode(readfile(file_name))
+        end)
+        if success and type(data) == "table" then
+            for k, v in pairs(data) do
+                savedData[k] = v
+            end
+        end
+    end
+    webhookUrl = savedData.webhookUrl
+    SelectedCategories = savedData.webhookCategories
+    lastFarmPosition = savedData.lastFarmPosition
+end
+
+-------------------------------------------
 ----- =======[ MAIN TAB ]
 -------------------------------------------
 
-local autoFishToggle 
+local autoFishToggle, autoFavouriteToggle, autoSellToggle
+
 autoFishToggle = Main:Toggle({
     Title = "Auto Fish",
     Callback = function(Value)
         state.AutoFish = Value
         if Value then startAutoFish() else stopAutoFish() end
+        saveConfig()
     end
 })
 
-Main:Toggle({
-    Title = "Auto Favourite",
+autoFavouriteToggle = Main:Toggle({
+    Title = "Auto Favourite (Epic+)",
     Callback = function(Value)
         state.AutoFavourite = Value
         if Value then startAutoFavourite() end
+        saveConfig()
     end
 })
 
-Main:Toggle({
-    Title = "Auto Sell",
+autoSellToggle = Main:Toggle({
+    Title = "Auto Sell (When inventory is full)",
     Callback = function(Value)
         state.AutoSell = Value
         if Value then startAutoSell() end
+        saveConfig()
     end
 })
 
@@ -390,16 +456,15 @@ for name, pos in pairs(island_locations) do
     AutoFarm:Button({
         Title = name,
         Callback = function()
-            lastFarmPosition = pos -- Store the last selected farm spot
+            lastFarmPosition = pos
             teleportTo(pos)
             task.wait(0.8)
             
             state.AutoFish = true 
             startAutoFish()     
 
-            if autoFishToggle then
-                autoFishToggle:Set(true)
-            end
+            if autoFishToggle then autoFishToggle:Set(true) end
+            saveConfig()
         end
     })
 end
@@ -407,31 +472,7 @@ end
 -------------------------------------------
 ----- =======[ FISH NOTIF TAB ]
 -------------------------------------------
-
-local savedData = { webhookUrl = "" }
-local file_name = "e_fishery_config.json"
-
-local function saveConfig()
-    if writefile then
-        writefile(file_name, HttpService:JSONEncode(savedData))
-    end
-end
-
-local function loadConfig()
-    if isfile and isfile(file_name) then
-        local success, data = pcall(function()
-            return HttpService:JSONDecode(readfile(file_name))
-        end)
-        if success and type(data) == "table" then
-            savedData = data
-        end
-    end
-end
-
-loadConfig()
-
-local webhookUrl = savedData.webhookUrl
-
+local categoriesDropdown
 FishNotif:Paragraph({
 	Title = "Fish Notification",
 	Color = "Green",
@@ -456,7 +497,6 @@ FishNotif:Input({
     Callback = function(text)
         if text == "" then
             webhookUrl = nil
-            savedData.webhookUrl = ""
             saveConfig()
             NotifyInfo("Webhook Cleared", "Fish notifications are now disabled.")
             return
@@ -465,7 +505,6 @@ FishNotif:Input({
         local isValid, result = validateWebhook(text)
         if isValid then
             webhookUrl = text
-            savedData.webhookUrl = text
             saveConfig()
             NotifySuccess("Webhook Set & Saved", "Channel ID: " .. tostring(result) .. ". Fish notifications are active!")
         else
@@ -475,7 +514,7 @@ FishNotif:Input({
     end
 })
 
-local FishDataById, VariantsByName, SelectedCategories = {}, {}, {}
+local FishDataById, VariantsByName = {}, {}
 local rarityMap = {
     [1] = "Common", [2] = "Uncommon", [3] = "Rare", [4] = "Epic",
     [5] = "Legendary", [6] = "Mythic", [7] = "Secret"
@@ -485,12 +524,7 @@ pcall(function()
     for _, item in ipairs(ReplicatedStorage.Items:GetChildren()) do
         local ok, data = pcall(require, item)
         if ok and data.Data and data.Data.Type == "Fishes" then
-            FishDataById[data.Data.Id] = {
-                Name = data.Data.Name,
-                SellPrice = data.SellPrice or 0,
-                Tier = data.Data.Tier,
-                Icon = data.IconId or data.Data.Icon or ""
-            }
+            FishDataById[data.Data.Id] = { Name = data.Data.Name, SellPrice = data.SellPrice or 0, Tier = data.Data.Tier, Icon = data.IconId or data.Data.Icon or "" }
         end
     end
     for _, v in ipairs(ReplicatedStorage.Variants:GetChildren()) do
@@ -501,7 +535,7 @@ pcall(function()
     end
 end)
 
-FishNotif:Dropdown({
+categoriesDropdown = FishNotif:Dropdown({
 	Title = "Select Fish Categories",
 	Desc = "Choose which categories to send to webhook",
 	Values = {"Secret", "Legendary", "Mythic", "Epic"},
@@ -509,6 +543,7 @@ FishNotif:Dropdown({
 	Default = {"Secret"},
 	Callback = function(selected)
 		SelectedCategories = selected
+        saveConfig()
 	end
 })
 
@@ -559,6 +594,8 @@ end
 local REObtainedNewFishNotification = getNetFolder() and getNetFolder():FindFirstChild("RE/ObtainedNewFishNotification")
 if REObtainedNewFishNotification then
     REObtainedNewFishNotification.OnClientEvent:Connect(function(itemId, _, eventData)
+        lastCatchTimestamp = os.time() -- Reset anti-stuck timer on every catch
+
         if not webhookUrl or webhookUrl == "" then return end
 
         pcall(function()
@@ -587,3 +624,37 @@ if REObtainedNewFishNotification then
         end)
     end)
 end
+
+-------------------------------------------
+----- =======[ INITIALIZE AND RESTORE SESSION ]
+-------------------------------------------
+
+local function applyLoadedState()
+    if categoriesDropdown and savedData.webhookCategories then
+        categoriesDropdown:Set(savedData.webhookCategories)
+    end
+
+    if savedData.autoFavourite then
+        state.AutoFavourite = true
+        autoFavouriteToggle:Set(true)
+    end
+    if savedData.autoSell then
+        state.AutoSell = true
+        autoSellToggle:Set(true)
+    end
+
+    if savedData.autoFish and savedData.lastFarmPosition then
+        NotifyInfo("Session Restored", "Returning to your last auto-farm location...")
+        teleportTo(savedData.lastFarmPosition)
+        task.wait(1.5)
+        
+        state.AutoFish = true
+        autoFishToggle:Set(true)
+    elseif savedData.autoFish then
+         state.AutoFish = true
+         autoFishToggle:Set(true)
+    end
+end
+
+loadConfig()
+applyLoadedState()
