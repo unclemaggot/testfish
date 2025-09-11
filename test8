@@ -59,8 +59,8 @@ local lastFarmPosition = nil
 local lastCatchTimestamp = 0
 local respawnTimerLoop = nil
 
--- Include Epic, Legendary, Mythic, Secret fish
-local allowedTiers = { [4]=true, [5]=true, [6]=true, [7]=true }
+-- MODIFIED: Include Legendary, Mythic, Secret fish (Tier 5+)
+local allowedTiers = { [5]=true, [6]=true, [7]=true }
 
 -------------------------------------------
 ----- =======[ NOTIFY FUNCTION ]
@@ -331,7 +331,7 @@ end)
 -------------------------------------------
 
 local Window = WindUI:CreateWindow({
-    Title = "e-Fishery V1", Icon = "shrimp", Author = "by Heyji (WindUI Edition)",
+    Title = "e-Fishery V1", Icon = "shrimp", Author = "by Heyji",
     Folder = "e-Fishery", Size = UDim2.fromOffset(600, 400),
     Transparent = true, Theme = "Dark", KeySystem = false, ScrollBarEnabled = true,
     HideSearchBar = true, User = { Enabled = true, Anonymous = false, Callback = function() end }
@@ -422,13 +422,16 @@ autoFishToggle = Main:Toggle({
         state.AutoFish = Value; if Value then startAutoFish() else stopAutoFish() end; saveConfig()
     end
 })
+
 autoFavouriteToggle = Main:Toggle({
-    Title = "Auto Favourite (Epic+)", Callback = function(Value)
+    Title = "Auto Favourite (Legendary+)", -- MODIFIED: Text updated
+    Callback = function(Value)
         state.AutoFavourite = Value; if Value then startAutoFavourite() end; saveConfig()
     end
 })
+
 autoSellToggle = Main:Toggle({
-    Title = "Auto Sell (When inventory is full)", Callback = function(Value)
+    Title = "Auto Sell", Callback = function(Value)
         state.AutoSell = Value; if Value then startAutoSell() end; saveConfig()
     end
 })
@@ -451,7 +454,6 @@ local island_locations = {
     ["Fisherman Island"] = { CFrame.new(-75.2439423, 3.24433279, 3103.45093, -0.996514142, -3.14880424e-08, -0.0834242329, -3.84156422e-08, 1, 8.14354024e-08, 0.0834242329, 8.43563228e-08, -0.996514142) },
 }
 
--- FIXED: Logic is restructured to prevent race conditions and double-triggers.
 for name, pos in pairs(island_locations) do
     AutoFarm:Button({
         Title = name, 
@@ -465,7 +467,7 @@ for name, pos in pairs(island_locations) do
             
             task.spawn(function()
                 teleportTo(pos)
-                task.wait(2.5) -- Increased delay to ensure teleport completes before fishing starts
+                task.wait(2.5) 
                 startAutoFish()
             end)
         end
@@ -530,7 +532,8 @@ end)
 
 categoriesDropdown = FishNotif:Dropdown({
 	Title = "Select Fish Categories", Desc = "Choose which categories to send to webhook",
-	Values = {"Secret", "Legendary", "Mythic", "Epic"}, Multi = true, Default = {"Secret"},
+	Values = {"Secret", "Legendary", "Mythic"}, -- MODIFIED: "Epic" removed
+    Multi = true, Default = {"Secret"},
 	Callback = function(selected) SelectedCategories = selected; saveConfig() end
 })
 
@@ -610,17 +613,7 @@ local function applyLoadedState()
 
     if savedData.autoFish then
         state.AutoFish = true
-        autoFishToggle:Set(true)
-        if savedData.lastFarmPosition then
-            NotifyInfo("Session Restored", "Returning to your last auto-farm location...")
-            task.spawn(function()
-                teleportTo(savedData.lastFarmPosition)
-                task.wait(2.5) 
-                startAutoFish()
-            end)
-        else
-            startAutoFish()
-        end
+        autoFishToggle:Set(true) -- This will now call the toggle's callback, starting the process
     end
 end
 
