@@ -53,7 +53,7 @@ local state = {
     AutoFish = false,
     AutoFavourite = false,
     AutoSell = false,
-    customFishDelay = 2.0, -- Default delay
+    customFishDelay = 2.0,
 }
 local lastFarmPosition = nil 
 local lastCatchTimestamp = 0
@@ -184,11 +184,10 @@ local function startAutoSell()
 end
 
 -- =========================
--- AUTO FISH V3 (WITH NEW VARIABLE DELAY)
+-- AUTO FISH V3 (WITH VARIABLE DELAY)
 -- =========================
 local autoFishLoop
 
--- NEW: Rod delay table provided by user
 local RodDelays = {
     ["Ares Rod"] = {custom = 1.12, bypass = 1.45},
     ["Angler Rod"] = {custom = 1.12, bypass = 1.45},
@@ -227,7 +226,7 @@ local function updateFishDelay()
         state.customFishDelay = RodDelays[rodName].custom
         NotifySuccess("Rod Detected", string.format("Rod: %s | Delay: %.2fs", rodName, state.customFishDelay))
     else
-        state.customFishDelay = 4.0 -- A safe default for slow rods
+        state.customFishDelay = 4.0 
         NotifyWarning("Rod Not Detected", "Using default delay of 4.0s.")
     end
 end
@@ -452,12 +451,23 @@ local island_locations = {
     ["Fisherman Island"] = { CFrame.new(-75.2439423, 3.24433279, 3103.45093, -0.996514142, -3.14880424e-08, -0.0834242329, -3.84156422e-08, 1, 8.14354024e-08, 0.0834242329, 8.43563228e-08, -0.996514142) },
 }
 
+-- FIXED: Logic is restructured to prevent race conditions and double-triggers.
 for name, pos in pairs(island_locations) do
     AutoFarm:Button({
-        Title = name, Callback = function()
-            lastFarmPosition = pos; teleportTo(pos); task.wait(0.8)
-            state.AutoFish = true; startAutoFish()
-            if autoFishToggle then autoFishToggle:Set(true) end; saveConfig()
+        Title = name, 
+        Callback = function()
+            lastFarmPosition = pos
+            state.AutoFish = true
+            if autoFishToggle then autoFishToggle:Set(true) end
+            saveConfig()
+            
+            NotifyInfo("Auto Farm", "Teleporting to " .. name .. "...")
+            
+            task.spawn(function()
+                teleportTo(pos)
+                task.wait(2.5) -- Increased delay to ensure teleport completes before fishing starts
+                startAutoFish()
+            end)
         end
     })
 end
@@ -597,12 +607,20 @@ local function applyLoadedState()
     if savedData.autoSell then
         state.AutoSell = true; autoSellToggle:Set(true)
     end
-    if savedData.autoFish and savedData.lastFarmPosition then
-        NotifyInfo("Session Restored", "Returning to your last auto-farm location...")
-        teleportTo(savedData.lastFarmPosition); task.wait(1.5)
-        state.AutoFish = true; autoFishToggle:Set(true)
-    elseif savedData.autoFish then
-         state.AutoFish = true; autoFishToggle:Set(true)
+
+    if savedData.autoFish then
+        state.AutoFish = true
+        autoFishToggle:Set(true)
+        if savedData.lastFarmPosition then
+            NotifyInfo("Session Restored", "Returning to your last auto-farm location...")
+            task.spawn(function()
+                teleportTo(savedData.lastFarmPosition)
+                task.wait(2.5) 
+                startAutoFish()
+            end)
+        else
+            startAutoFish()
+        end
     end
 end
 
