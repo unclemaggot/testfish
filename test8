@@ -53,7 +53,7 @@ local state = {
     AutoFish = false,
     AutoFavourite = false,
     AutoSell = false,
-    customFishDelay = 0.7, -- For variable rod delay
+    customFishDelay = 2.0, -- Default delay
 }
 local lastFarmPosition = nil 
 local lastCatchTimestamp = 0
@@ -184,13 +184,27 @@ local function startAutoSell()
 end
 
 -- =========================
--- AUTO FISH V3 (WITH VARIABLE DELAY)
+-- AUTO FISH V3 (WITH NEW VARIABLE DELAY)
 -- =========================
 local autoFishLoop
 
-local fastRods = { ["Ares Rod"] = true, ["Angler Rod"] = true, ["Ghostfinn Rod"] = true }
-local mediumRods = { ["Astral Rod"] = true, ["Chrome Rod"] = true, ["Steampunk Rod"] = true }
-local veryLowRods = { ["Lucky Rod"] = true, ["Midnight Rod"] = true, ["Demascus Rod"] = true, ["Grass Rod"] = true, ["Luck Rod"] = true, ["Carbon Rod"] = true, ["Lava Rod"] = true, ["Starter Rod"] = true }
+-- NEW: Rod delay table provided by user
+local RodDelays = {
+    ["Ares Rod"] = {custom = 1.12, bypass = 1.45},
+    ["Angler Rod"] = {custom = 1.12, bypass = 1.45},
+    ["Ghostfinn Rod"] = {custom = 1.12, bypass = 1.45},
+    ["Astral Rod"] = {custom = 1.9, bypass = 1.45},
+    ["Chrome Rod"] = {custom = 2.3, bypass = 2},
+    ["Steampunk Rod"] = {custom = 2.5, bypass = 2.3},
+    ["Lucky Rod"] = {custom = 3.5, bypass = 3.6},
+    ["Midnight Rod"] = {custom = 3.3, bypass = 3.4},
+    ["Demascus Rod"] = {custom = 3.9, bypass = 3.8},
+    ["Grass Rod"] = {custom = 3.8, bypass = 3.9},
+    ["Luck Rod"] = {custom = 4.2, bypass = 4.1},
+    ["Carbon Rod"] = {custom = 4, bypass = 3.8},
+    ["Lava Rod"] = {custom = 4.2, bypass = 4.1},
+    ["Starter Rod"] = {custom = 4.3, bypass = 4.2},
+}
 
 local function getValidRodName()
     local display = player.PlayerGui:FindFirstChild("Backpack") and player.PlayerGui.Backpack:FindFirstChild("Display")
@@ -199,9 +213,8 @@ local function getValidRodName()
     for _, tile in ipairs(display:GetChildren()) do
         local itemNamePath = tile:FindFirstChild("Inner", true) and tile.Inner:FindFirstChild("Tags", true) and tile.Inner.Tags:FindFirstChild("ItemName")
         if itemNamePath and itemNamePath:IsA("TextLabel") then
-            local name = itemNamePath.Text
-            if veryLowRods[name] or fastRods[name] or mediumRods[name] then
-                return name
+            if RodDelays[itemNamePath.Text] then
+                return itemNamePath.Text
             end
         end
     end
@@ -210,18 +223,12 @@ end
 
 local function updateFishDelay()
     local rodName = getValidRodName()
-    if rodName then
-        if fastRods[rodName] then
-            state.customFishDelay = 0.5
-        elseif mediumRods[rodName] then
-            state.customFishDelay = 0.7
-        elseif veryLowRods[rodName] then
-            state.customFishDelay = 0.9
-        end
-        NotifySuccess("Rod Detected", string.format("Rod: %s | Delay: %.1fs", rodName, state.customFishDelay))
+    if rodName and RodDelays[rodName] then
+        state.customFishDelay = RodDelays[rodName].custom
+        NotifySuccess("Rod Detected", string.format("Rod: %s | Delay: %.2fs", rodName, state.customFishDelay))
     else
-        state.customFishDelay = 0.7 -- Default if not found
-        NotifyWarning("Rod Not Detected", "Using default delay of 0.7s.")
+        state.customFishDelay = 4.0 -- A safe default for slow rods
+        NotifyWarning("Rod Not Detected", "Using default delay of 4.0s.")
     end
 end
 
@@ -235,7 +242,7 @@ end
 
 local function startAutoFish()
     activateFpsBoost()
-    updateFishDelay() -- Check for rod and set delay
+    updateFishDelay()
     
     if autoFishLoop then task.cancel(autoFishLoop) end
     if respawnTimerLoop then task.cancel(respawnTimerLoop) end
@@ -325,7 +332,7 @@ end)
 -------------------------------------------
 
 local Window = WindUI:CreateWindow({
-    Title = "e-Fishery V1", Icon = "shrimp", Author = "by Heyji",
+    Title = "e-Fishery V1", Icon = "shrimp", Author = "by Zee (WindUI Edition)",
     Folder = "e-Fishery", Size = UDim2.fromOffset(600, 400),
     Transparent = true, Theme = "Dark", KeySystem = false, ScrollBarEnabled = true,
     HideSearchBar = true, User = { Enabled = true, Anonymous = false, Callback = function() end }
@@ -347,7 +354,6 @@ WindUI:SetNotificationLower(true)
 local Home = Window:Tab({ Title = "Developer Info", Icon = "hard-drive" })
 local Main = Window:Tab({ Title = "Main", Icon = "toggle-right" })
 local AutoFarm = Window:Tab({ Title = "Auto Farm", Icon = "map" })
-local Trade = Window:Tab({ Title = "Trade", Icon = "handshake" }) -- New Tab
 local FishNotif = Window:Tab({ Title = "Fish Notification", Icon = "bell-ring" })
 
 -------------------------------------------
@@ -418,12 +424,12 @@ autoFishToggle = Main:Toggle({
     end
 })
 autoFavouriteToggle = Main:Toggle({
-    Title = "Auto Favourite", Callback = function(Value)
+    Title = "Auto Favourite (Epic+)", Callback = function(Value)
         state.AutoFavourite = Value; if Value then startAutoFavourite() end; saveConfig()
     end
 })
 autoSellToggle = Main:Toggle({
-    Title = "Auto Sell", Callback = function(Value)
+    Title = "Auto Sell (When inventory is full)", Callback = function(Value)
         state.AutoSell = Value; if Value then startAutoSell() end; saveConfig()
     end
 })
@@ -455,107 +461,6 @@ for name, pos in pairs(island_locations) do
         end
     })
 end
-
--------------------------------------------
------ =======[ TRADE TAB & FUNCTIONS ]
--------------------------------------------
-
-local TradeFunction = {
-	TempTradeList = {}, saveTempMode = false, onTrade = false, targetUserId = nil,
-	tradingInProgress = false, AutoTrade = false
-}
-
-local function getPlayerList()
-    local list = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player then table.insert(list, p.DisplayName .. " (" .. p.Name .. ")") end
-    end
-    return list
-end
-
-local TradeTargetDropdown = Trade:Dropdown({
-    Title = "Select Trade Target", Values = getPlayerList(),
-    Callback = function(selected)
-        local username = selected:match("%((.-)%)")
-        local target = Players:FindFirstChild(username)
-        if target then
-            TradeFunction.targetUserId = target.UserId
-            NotifySuccess("Trade Target", "Target set to: " .. target.Name)
-        else
-            NotifyError("Trade Target", "Player not found!")
-        end
-    end
-})
-
-local function refreshDropdown() TradeTargetDropdown:Refresh(getPlayerList()) end
-Players.PlayerAdded:Connect(refreshDropdown); Players.PlayerRemoving:Connect(refreshDropdown)
-
-Trade:Toggle({
-    Title = "Save Items Mode", Desc = "Click inventory items to add them to the trade queue.",
-    Callback = function(state)
-        TradeFunction.saveTempMode = state
-        if state then
-            TradeFunction.TempTradeList = {}
-            NotifySuccess("Save Mode", "Enabled - Click items in your inventory to save them.")
-        else
-            NotifyInfo("Save Mode", "Disabled - "..#TradeFunction.TempTradeList.." items saved.")
-        end
-    end
-})
-
-local function TradeAll()
-    if TradeFunction.tradingInProgress then NotifyWarning("Mass Trade", "A trade is already in progress.") return end
-    if not TradeFunction.targetUserId then NotifyError("Mass Trade", "Please select a trade target first.") return end
-    if #TradeFunction.TempTradeList == 0 then NotifyWarning("Mass Trade", "No items have been saved to trade.") return end
-
-    TradeFunction.tradingInProgress = true
-    NotifyInfo("Mass Trade", "Starting trade of "..#TradeFunction.TempTradeList.." items...")
-
-    task.spawn(function()
-        local net = getNetFolder()
-        if not net then TradeFunction.tradingInProgress = false; return end
-        local InitiateTrade = net:FindFirstChild("RF/InitiateTrade")
-        if not InitiateTrade then TradeFunction.tradingInProgress = false; return end
-
-        for i, item in ipairs(TradeFunction.TempTradeList) do
-            if not TradeFunction.AutoTrade then NotifyWarning("Mass Trade", "Auto Trade was stopped."); break end
-            
-            NotifyInfo("Mass Trade", string.format("Trading item %d of %d...", i, #TradeFunction.TempTradeList))
-            local success, _ = pcall(InitiateTrade.InvokeServer, InitiateTrade, TradeFunction.targetUserId, item.UUID, item.Category)
-            
-            if success then
-                NotifySuccess("Mass Trade", string.format("Trade for item %d sent.", i))
-                task.wait(6) -- Wait for trade to likely complete
-            else
-                NotifyError("Mass Trade", string.format("Failed to send trade for item %d.", i))
-            end
-        end
-        NotifySuccess("Mass Trade", "Finished trading all saved items.")
-        TradeFunction.tradingInProgress = false
-        TradeFunction.TempTradeList = {}
-    end)
-end
-
-Trade:Toggle({
-    Title = "Auto Trade", Desc = "Automatically trades all saved items to the target player.",
-    Callback = function(state)
-        TradeFunction.AutoTrade = state
-        if state then TradeAll() end
-    end
-})
-
-local oldEquipItem
-oldEquipItem = hookmetamethod(game, "__namecall", function(self, ...)
-    if TradeFunction.saveTempMode and self.Name == "EquipItem" and getnamecallmethod() == "FireServer" then
-        local uuid, categoryName = ...
-        if uuid and categoryName then
-            table.insert(TradeFunction.TempTradeList, {UUID = uuid, Category = categoryName})
-            NotifySuccess("Save Mode", "Added item to queue (" .. #TradeFunction.TempTradeList .. " total)")
-        end
-        return nil
-    end
-    return oldEquipItem(self, ...)
-end)
 
 -------------------------------------------
 ----- =======[ FISH NOTIF TAB ]
