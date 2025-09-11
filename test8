@@ -373,7 +373,7 @@ local function LookupDiscordInvite(inviteCode)
     end
     return nil
 end
-local inviteData = LookupDiscordInvite("muuPtUBV2H")
+local inviteData = LookupDiscordInvite("UyscFN7q7J")
 if inviteData then
     Home:Paragraph({
         Title = string.format("[DISCORD] %s", inviteData.name),
