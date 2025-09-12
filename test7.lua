@@ -107,25 +107,29 @@ local function startAutoWeather()
             return
         end
         
-        NotifySuccess("Auto Weather", "System is now active and detecting weather via UI.")
+        NotifySuccess("Auto Weather", "System active. Detecting via notification UI.")
+        local lastWeatherActivationTime = 0
 
         while state.AutoWeather do
             pcall(function()
-                -- DETECT WEATHER VIA UI: Look for the on-screen weather display.
-                local weatherGui = player.PlayerGui:FindFirstChild("Weather")
-                local isWeatherActiveOnScreen = weatherGui and weatherGui.Enabled and weatherGui:FindFirstChild("Display") and weatherGui.Display.Visible
+                -- Advanced Detection: Check for the game's general notification UI.
+                local notificationGui = player.PlayerGui:FindFirstChild("Small Notification")
+                local isNotificationVisible = notificationGui and notificationGui.Enabled and notificationGui.Display.Visible
 
-                if not isWeatherActiveOnScreen and #state.SelectedWeathers > 0 then
-                    NotifyInfo("Auto Weather", "No active weather UI detected. Activating a new one...")
+                -- If a notification is on screen, assume a weather event *could* be active, so we wait.
+                -- We also add a 60-second cooldown to prevent spam after an event ends.
+                if not isNotificationVisible and os.time() - lastWeatherActivationTime > 60 and #state.SelectedWeathers > 0 then
+                    NotifyInfo("Auto Weather", "No major event notification detected. Activating a new one...")
                     local chosenWeather = state.SelectedWeathers[math.random(1, #state.SelectedWeathers)]
                     
                     weatherRemote:InvokeServer(chosenWeather)
+                    lastWeatherActivationTime = os.time()
                     
-                    -- Wait for a few seconds after activating to give the UI time to appear.
+                    -- Wait for a few seconds after activating
                     task.wait(5) 
                 end
             end)
-            task.wait(1) -- Check every second
+            task.wait(2) -- Check every 2 seconds
         end
     end)
 end
@@ -241,7 +245,7 @@ end)
 -------------------------------------------
 
 local Window = WindUI:CreateWindow({
-    Title = "e-Fishery V2.0", Author = "by Zee (WindUI Edition)", Folder = "e-Fishery",
+    Title = "e-Fishery V2.1", Author = "by Zee (WindUI Edition)", Folder = "e-Fishery",
     Size = UDim2.fromOffset(600, 520), Transparent = true, Theme = "Dark", ScrollBarEnabled = true, HideSearchBar = true,
     User = { Enabled = true, Anonymous = false, Callback = function() end }
 })
@@ -308,7 +312,7 @@ autoSellToggle = Main:Toggle({ Title = "Auto Sell", Callback = function(v) state
 Main:Divider()
 
 mainWeatherToggle = Main:Toggle({
-    Title = "Enable Auto Weather", Desc = "Uses the most reliable UI detection method.",
+    Title = "Enable Auto Weather", Desc = "Uses advanced UI detection for reliability.",
     Callback = function(v) state.AutoWeather = v; if v then startAutoWeather() else stopAutoWeather() end; saveConfig() end
 })
 weatherDropdown = Main:Dropdown({
