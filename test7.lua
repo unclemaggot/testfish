@@ -342,11 +342,11 @@ end)
 local Window = WindUI:CreateWindow({
     Title = "e-Fishery V1",
     Icon = "shrimp",
-    Author = "by Zee (WindUI Edition)",
+    Author = "by Heyji",
     Folder = "e-Fishery",
     Size = UDim2.fromOffset(600, 400),
     Transparent = true,
-    Theme = "Dark",
+    Theme = "Light",
     KeySystem = false,
     ScrollBarEnabled = true,
     HideSearchBar = true,
