@@ -2,10 +2,8 @@
 ----- =======[ Load WindUI ]
 -------------------------------------------
 
--- Using the more stable WindUI link from the reference script
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 if not WindUI then
-    -- If the library fails to load, stop the script with an error.
     error("e-Fishery: Could not load the WindUI library. The script cannot continue.")
     return
 end
@@ -42,8 +40,6 @@ local function safeRequire(pathTbl)
 end
 
 -- Initialize controllers and utilities
-local FishingController = safeRequire({"Controllers","FishingController"})
-local AnimationController = safeRequire({"Controllers","AnimationController"})
 local Replion = safeRequire({"Packages","Replion"}) or safeRequire({"Packages","replion"})
 local ItemUtility = safeRequire({"Shared","ItemUtility"})
 
@@ -71,13 +67,13 @@ local state = {
     AutoSell = false,
     AutoBuyWeather = false,
     SelectedWeathers = {},
+    PerfectCast = true
 }
 local lastFarmPosition = nil 
 local lastCatchTimestamp = 0
-local respawnTimerLoop = nil
 local autoBuyWeatherLoop
+local autoFishLoop
 
--- Include Epic, Legendary, Mythic, Secret fish
 local allowedTiers = { [4]=true, [5]=true, [6]=true, [7]=true }
 
 -------------------------------------------
@@ -96,35 +92,16 @@ local function NotifyInfo(title, message, duration)
     WindUI:Notify({ Title = title, Content = message, Duration = duration or 5, Icon = "info" })
 end
 
-local function NotifyWarning(title, message, duration)
-    WindUI:Notify({ Title = title, Content = message, Duration = duration or 5, Icon = "triangle-alert" })
-end
-
 -- =========================
 -- CORE FEATURE FUNCTIONS
 -- =========================
-
-local function activateFpsBoost()
-    if fpsBoostActive then return end 
-    pcall(function()
-        for _, v in pairs(game:GetDescendants()) do
-			if v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic; v.Reflectance = 0
-			elseif v:IsA("Decal") or v:IsA("Texture") then v.Transparency = 1 end
-		end
-		local Lighting = game:GetService("Lighting")
-		for _, effect in pairs(Lighting:GetChildren()) do if effect:IsA("PostEffect") then effect.Enabled = false end end
-		Lighting.GlobalShadows = false; Lighting.FogEnd = 1e10; settings().Rendering.QualityLevel = "Level01"
-    end)
-    NotifyInfo("Performance", "FPS Boost activated for smooth farming."); fpsBoostActive = true
-end
 
 local function startAutoFavourite()
     task.spawn(function()
         while state.AutoFavourite do
             pcall(function()
-                if not Replion or not ItemUtility then return end
-                local favoriteRemote = getNetFolder() and getNetFolder():FindFirstChild("RE/FavoriteItem")
-                if not favoriteRemote then return end
+                local net = getNetFolder(); if not net or not Replion or not ItemUtility then return end
+                local favoriteRemote = net:FindFirstChild("RE/FavoriteItem"); if not favoriteRemote then return end
                 local DataReplion = Replion.Client:WaitReplion("Data")
                 local items = DataReplion and DataReplion:Get({"Inventory","Items"})
                 if type(items) ~= "table" then return end
@@ -158,44 +135,88 @@ local function startAutoSell()
     end)
 end
 
-local autoFishLoop
+-- ## NEW ADVANCED AUTO FISH FUNCTION ##
 local function startAutoFish()
-    activateFpsBoost() 
-    if autoFishLoop then task.cancel(autoFishLoop) end
-    if respawnTimerLoop then task.cancel(respawnTimerLoop) end
-    lastCatchTimestamp = os.time()
-    respawnTimerLoop = task.spawn(function()
-        while state.AutoFish do
-            if os.time() - lastCatchTimestamp > 60 then
-                NotifyWarning("Anti-Stuck Triggered", "Resetting character...")
-                if player.Character then player.Character:BreakJoints() end
-                lastCatchTimestamp = os.time() 
-            end; task.wait(1)
-        end
-    end)
+    if autoFishLoop then return end
+
     autoFishLoop = task.spawn(function()
-        local net = getNetFolder(); if not net then return end
-        local equipEvent, chargeFunc, startMini, complete = net:WaitForChild("RE/EquipToolFromHotbar"), net:WaitForChild("RF/ChargeFishingRod"), net:WaitForChild("RF/RequestFishingMinigameStarted"), net:WaitForChild("RE/FishingCompleted")
+        local net = getNetFolder()
+        if not net then NotifyError("Auto Fish", "Network folder not found."); return end
+
+        local equipRemote = net:FindFirstChild("RE/EquipToolFromHotbar")
+        local chargeRemote = net:FindFirstChild("RF/ChargeFishingRod")
+        local miniGameRemote = net:FindFirstChild("RF/RequestFishingMinigameStarted")
+        local finishRemote = net:FindFirstChild("RE/FishingCompleted")
+        local textEffectRemote = net:FindFirstChild("RE/ReplicateTextEffect")
+
+        if not (equipRemote and chargeRemote and miniGameRemote and finishRemote and textEffectRemote) then
+            NotifyError("Auto Fish", "One or more fishing remotes could not be found.")
+            return
+        end
+
+        local fishingActive = false
+        local fishBiteConnection
+
+        fishBiteConnection = textEffectRemote.OnClientEvent:Connect(function(data)
+            if state.AutoFish and fishingActive and data and data.TextData and data.TextData.EffectType == "Exclaim" then
+                local myHead = player.Character and player.Character:FindFirstChild("Head")
+                if myHead and data.Container == myHead then
+                    -- Fish on the line, complete the catch
+                    task.spawn(function()
+                        for i = 1, 3 do
+                            task.wait()
+                            finishRemote:FireServer()
+                        end
+                    end)
+                end
+            end
+        end)
+        
+        NotifySuccess("Auto Fish", "Advanced auto-fish initiated.")
+
         while state.AutoFish do
-            if FishingController and FishingController.OnCooldown and FishingController:OnCooldown() then repeat task.wait(0.2) until not (FishingController:OnCooldown()) or not state.AutoFish end
-            if not state.AutoFish then break end
             pcall(function()
-                if AnimationController and AnimationController.PlayAnimation then AnimationController:PlayAnimation("CastFromFullChargePosition1Hand") end
-                equipEvent:FireServer(1); task.wait(0.1)
-                chargeFunc:InvokeServer(workspace:GetServerTimeNow()); task.wait(0.1)
-                startMini:InvokeServer(-0.75, 1)
-                if AnimationController and AnimationController.PlayAnimation then AnimationController:PlayAnimation("Reel") end
-                task.wait(1.5)
-                for i=1,20 do complete:FireServer(); task.wait(0.05) end
+                fishingActive = true
+                
+                equipRemote:FireServer(1)
+                task.wait(0.1)
+                
+                chargeRemote:InvokeServer(workspace:GetServerTimeNow())
+                task.wait(0.5)
+
+                local x, y
+                if state.PerfectCast then
+                    x = -0.749999 + (math.random(-500, 500) / 10000000)
+                    y = 0.991067 + (math.random(-500, 500) / 10000000)
+                else
+                    x = math.random(-1000, 1000) / 1000
+                    y = math.random(0, 1000) / 1000
+                end
+                
+                miniGameRemote:InvokeServer(x, y)
+                
+                -- Wait for the fish to bite. The OnClientEvent connection will handle the rest.
+                -- We add a timeout to recast if no fish bites after a while.
+                task.wait(15) 
+                fishingActive = false
             end)
-            local t = os.clock(); while os.clock() - t < 0.7 and state.AutoFish do task.wait() end
+            task.wait(1) -- Short delay before recasting
+        end
+
+        -- Cleanup when autofish is turned off
+        if fishBiteConnection then
+            fishBiteConnection:Disconnect()
         end
     end)
 end
 
 local function stopAutoFish()
-    if autoFishLoop then task.cancel(autoFishLoop); autoFishLoop = nil end
-    if respawnTimerLoop then task.cancel(respawnTimerLoop); respawnTimerLoop = nil end
+    if autoFishLoop then
+        state.AutoFish = false
+        task.cancel(autoFishLoop)
+        autoFishLoop = nil
+        NotifyInfo("Auto Fish", "Advanced auto-fish stopped.")
+    end
 end
 
 local function teleportTo(posList)
@@ -215,7 +236,7 @@ end)
 -------------------------------------------
 
 local Window = WindUI:CreateWindow({
-    Title = "e-Fishery (Definitive Edition)", Author = "by Zee (WindUI Edition)", Folder = "e-Fishery",
+    Title = "e-Fishery V4.0", Author = "by Zee (WindUI Edition)", Folder = "e-Fishery",
     Size = UDim2.fromOffset(600, 520), Transparent = true, Theme = "Dark", ScrollBarEnabled = true, HideSearchBar = true,
     User = { Enabled = true, Anonymous = false, Callback = function() end }
 })
@@ -251,7 +272,7 @@ if inviteData then Home:Paragraph({ Title = string.format("[DISCORD] %s", invite
 -------------------------------------------
 ----- =======[ CONFIG & SAVE/LOAD SYSTEM ]
 -------------------------------------------
-local savedData = { webhookUrl = "", autoFish = false, autoFavourite = false, autoSell = false, webhookCategories = {"Secret"}, lastFarmPosition = nil, autoBuyWeather = false, selectedWeathers = {} }
+local savedData = { webhookUrl = "", autoFish = false, autoFavourite = false, autoSell = false, webhookCategories = {"Secret"}, lastFarmPosition = nil, autoBuyWeather = false, selectedWeathers = {}, perfectCast = true }
 local file_name = "e_fishery_session.json"
 local webhookUrl, SelectedCategories
 
@@ -259,6 +280,7 @@ local function saveConfig()
     if writefile then
         savedData.webhookUrl, savedData.autoFish, savedData.autoFavourite, savedData.autoSell = webhookUrl, state.AutoFish, state.AutoFavourite, state.AutoSell
         savedData.webhookCategories, savedData.lastFarmPosition, savedData.autoBuyWeather, savedData.selectedWeathers = SelectedCategories, lastFarmPosition, state.AutoBuyWeather, state.SelectedWeathers
+        savedData.perfectCast = state.PerfectCast
         writefile(file_name, HttpService:JSONEncode(savedData))
     end
 end
@@ -274,9 +296,10 @@ end
 ----- =======[ MAIN TAB ]
 -------------------------------------------
 
-local autoFishToggle, autoFavouriteToggle, autoSellToggle
+local autoFishToggle, autoFavouriteToggle, autoSellToggle, perfectCastToggle
 
-autoFishToggle = Main:Toggle({ Title = "Auto Fish", Callback = function(v) state.AutoFish = v; if v then startAutoFish() else stopAutoFish() end; saveConfig() end })
+autoFishToggle = Main:Toggle({ Title = "Enable Auto Fish (Advanced)", Desc = "Uses a smart, event-driven method for fishing.", Callback = function(v) state.AutoFish = v; if v then startAutoFish() else stopAutoFish() end; saveConfig() end })
+perfectCastToggle = Main:Toggle({ Title = "Auto Perfect Cast", Callback = function(v) state.PerfectCast = v; saveConfig() end })
 autoFavouriteToggle = Main:Toggle({ Title = "Auto Favourite", Callback = function(v) state.AutoFavourite = v; if v then startAutoFavourite() end; saveConfig() end })
 autoSellToggle = Main:Toggle({ Title = "Auto Sell", Callback = function(v) state.AutoSell = v; if v then startAutoSell() end; saveConfig() end })
 
@@ -290,7 +313,7 @@ local island_locations = {
     ["Machine"] = { CFrame.new(-1459.37, 14.71, 1831.51, 0.77, 0, -0.62, 0, 1, 0, 0.62, 0, 0.77) }, ["Treasure Room"] = { CFrame.new(-3625.07, -279.07, -1594.57, 0.91, 0, -0.39, 0, 1, 0, 0.39, 0, 0.91) },
     ["Sisyphus Statue"] = { CFrame.new(-3777.43, -135.07, -975.19, -0.28, 0, -0.95, 0, 1, 0, 0.95, 0, -0.28) }, ["Fisherman Island"] = { CFrame.new(-75.24, 3.24, 3103.45, -0.99, 0, -0.08, 0, 1, 0, 0.08, 0, -0.99) }
 }
-for name, pos in pairs(island_locations) do AutoFarm:Button({ Title = name, Callback = function() lastFarmPosition = pos; teleportTo(pos); task.wait(0.8); state.AutoFish = true; startAutoFish(); if autoFishToggle then autoFishToggle:Set(true) end; saveConfig() end }) end
+for name, pos in pairs(island_locations) do AutoFarm:Button({ Title = name, Callback = function() lastFarmPosition = pos; teleportTo(pos); task.wait(0.8); state.AutoFish = true; if autoFishToggle then autoFishToggle:Set(true) end; startAutoFish(); saveConfig() end }) end
 
 -------------------------------------------
 ----- =======[ BUY WEATHER TAB ]
@@ -299,13 +322,10 @@ local autoBuyWeatherToggle, autoBuyWeatherDropdown
 
 local function purchaseSelectedWeathers()
     if not state.AutoBuyWeather or #state.SelectedWeathers == 0 then return end
-
     NotifyInfo("Auto Buy Weather", "Attempting to activate a selected weather...")
     local chosenWeather = state.SelectedWeathers[math.random(1, #state.SelectedWeathers)]
     local remote = getNetFolder() and getNetFolder():FindFirstChild("RF/PurchaseWeatherEvent")
-    if remote then
-        pcall(remote.InvokeServer, remote, chosenWeather)
-    end
+    if remote then pcall(remote.InvokeServer, remote, chosenWeather) end
 end
 
 autoBuyWeatherToggle = BuyWeather:Toggle({
@@ -315,12 +335,10 @@ autoBuyWeatherToggle = BuyWeather:Toggle({
         if value then
             if autoBuyWeatherLoop then task.cancel(autoBuyWeatherLoop) end
             autoBuyWeatherLoop = task.spawn(function()
-                purchaseSelectedWeathers() -- Run once immediately
+                purchaseSelectedWeathers()
                 while state.AutoBuyWeather do
-                    task.wait(990) -- Wait ~16.5 minutes
-                    if state.AutoBuyWeather then
-                        purchaseSelectedWeathers()
-                    end
+                    task.wait(990)
+                    if state.AutoBuyWeather then purchaseSelectedWeathers() end
                 end
             end)
         else
@@ -426,8 +444,9 @@ local function applyLoadedState()
     if categoriesDropdown and savedData.webhookCategories then categoriesDropdown:Set(savedData.webhookCategories) end
     if savedData.autoFavourite then state.AutoFavourite = true; autoFavouriteToggle:Set(true) end
     if savedData.autoSell then state.AutoSell = true; autoSellToggle:Set(true) end
+    if savedData.perfectCast and perfectCastToggle then state.PerfectCast = true; perfectCastToggle:Set(true) end
 
-    -- Restore state for the new Buy Weather tab
+    -- Restore state for the Buy Weather tab
     if autoBuyWeatherDropdown and savedData.selectedWeathers then autoBuyWeatherDropdown:Set(savedData.selectedWeathers); state.SelectedWeathers = savedData.selectedWeathers end
     if autoBuyWeatherToggle and savedData.autoBuyWeather then state.AutoBuyWeather = true; autoBuyWeatherToggle:Set(true) end
     
