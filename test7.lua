@@ -365,6 +365,26 @@ Window:EditOpenButton({
     Color = ColorSequence.new(Color3.fromHex("9600FF"), Color3.fromHex("AEBAF8")),
     Draggable = true,
 })
+-- ADD THIS CODE BLOCK FOR A LIGHT THEME BUTTON
+task.wait() -- Give the UI a moment to create the objects
+
+local OpenButton = Window.OpenButton -- Access the button instance
+if OpenButton then
+    -- 1. Set the main background to a light color
+    OpenButton.BackgroundColor3 = Color3.fromHex("F2F2F2") -- A clean, light grey
+
+    -- 2. Find the Title TextLabel and change its color to dark
+    local Title = OpenButton:FindFirstChild("Title")
+    if Title then
+        Title.TextColor3 = Color3.fromHex("1E1E1E") -- A dark charcoal for the text
+    end
+
+    -- 3. Find the Icon ImageLabel and change its color to dark
+    local Icon = OpenButton:FindFirstChild("Icon")
+    if Icon then
+        Icon.ImageColor3 = Color3.fromHex("1E1E1E") -- A dark charcoal for the icon
+    end
+end
 
 Window:Tag({ Title = "STABLE", Color = Color3.fromHex("#30ff6a") })
 WindUI:SetNotificationLower(true)
