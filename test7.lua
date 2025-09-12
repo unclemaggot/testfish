@@ -92,6 +92,7 @@ local function stopAutoWeather()
     if autoWeatherLoop then task.cancel(autoWeatherLoop); autoWeatherLoop = nil end
 end
 
+-- ## THIS FUNCTION HAS BEEN REWRITTEN TO USE THE ARCVOURHUB TIMER LOGIC ##
 local function startAutoWeather()
     if autoWeatherLoop then stopAutoWeather() end
 
@@ -107,29 +108,25 @@ local function startAutoWeather()
             return
         end
         
-        NotifySuccess("Auto Weather", "System active. Detecting via notification UI.")
-        local lastWeatherActivationTime = 0
+        local function purchaseSelectedWeathers()
+            if not state.AutoWeather or #state.SelectedWeathers == 0 then return end
+            
+            NotifyInfo("Auto Weather", "Attempting to activate a selected weather...")
+            local chosenWeather = state.SelectedWeathers[math.random(1, #state.SelectedWeathers)]
+            pcall(weatherRemote.InvokeServer, weatherRemote, chosenWeather)
+        end
+        
+        NotifySuccess("Auto Weather", "System active. Will activate weather every ~16 minutes.")
+        
+        -- Immediately try to purchase when activated
+        purchaseSelectedWeathers()
 
         while state.AutoWeather do
-            pcall(function()
-                -- Advanced Detection: Check for the game's general notification UI.
-                local notificationGui = player.PlayerGui:FindFirstChild("Small Notification")
-                local isNotificationVisible = notificationGui and notificationGui.Enabled and notificationGui.Display.Visible
-
-                -- If a notification is on screen, assume a weather event *could* be active, so we wait.
-                -- We also add a 60-second cooldown to prevent spam after an event ends.
-                if not isNotificationVisible and os.time() - lastWeatherActivationTime > 60 and #state.SelectedWeathers > 0 then
-                    NotifyInfo("Auto Weather", "No major event notification detected. Activating a new one...")
-                    local chosenWeather = state.SelectedWeathers[math.random(1, #state.SelectedWeathers)]
-                    
-                    weatherRemote:InvokeServer(chosenWeather)
-                    lastWeatherActivationTime = os.time()
-                    
-                    -- Wait for a few seconds after activating
-                    task.wait(5) 
-                end
-            end)
-            task.wait(2) -- Check every 2 seconds
+            -- Wait for 990 seconds (16.5 minutes), similar to ArcvourHUB's 1000s timer
+            task.wait(990) 
+            if state.AutoWeather then
+                purchaseSelectedWeathers()
+            end
         end
     end)
 end
@@ -245,7 +242,7 @@ end)
 -------------------------------------------
 
 local Window = WindUI:CreateWindow({
-    Title = "e-Fishery V2.1", Author = "by Zee (WindUI Edition)", Folder = "e-Fishery",
+    Title = "e-Fishery V2.2", Author = "by Zee (WindUI Edition)", Folder = "e-Fishery",
     Size = UDim2.fromOffset(600, 520), Transparent = true, Theme = "Dark", ScrollBarEnabled = true, HideSearchBar = true,
     User = { Enabled = true, Anonymous = false, Callback = function() end }
 })
@@ -312,7 +309,7 @@ autoSellToggle = Main:Toggle({ Title = "Auto Sell", Callback = function(v) state
 Main:Divider()
 
 mainWeatherToggle = Main:Toggle({
-    Title = "Enable Auto Weather", Desc = "Uses advanced UI detection for reliability.",
+    Title = "Enable Auto Weather", Desc = "Activates a selected weather every ~16 minutes.",
     Callback = function(v) state.AutoWeather = v; if v then startAutoWeather() else stopAutoWeather() end; saveConfig() end
 })
 weatherDropdown = Main:Dropdown({
