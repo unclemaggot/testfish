@@ -96,38 +96,50 @@ local function startAutoWeather()
     if autoWeatherLoop then stopAutoWeather() end
 
     autoWeatherLoop = task.spawn(function()
+        NotifyInfo("[DEBUG]", "Initializing Auto Weather...")
+
         local net = getNetFolder()
         if not net then
-            NotifyError("Weather System", "Could not find the game's network folder.")
+            NotifyError("[DEBUG] FATAL ERROR", "Could not find the game's network folder.")
             return 
         end
+        NotifyInfo("[DEBUG]", "Step 1: Network folder found.")
+
         local weatherRemote = net:FindFirstChild("RF/PurchaseWeatherEvent")
         if not weatherRemote then
-            NotifyError("Weather System", "Could not find 'RF/PurchaseWeatherEvent' remote.")
+            NotifyError("[DEBUG] FATAL ERROR", "Could not find 'RF/PurchaseWeatherEvent' remote.")
             return
         end
+        NotifyInfo("[DEBUG]", "Step 2: Weather remote found.")
 
         local SessionReplion = Replion.Client:WaitReplion("Session")
         if not SessionReplion then
-            NotifyError("Weather System", "Could not connect to the game's session state.")
+            NotifyError("[DEBUG] FATAL ERROR", "Could not connect to the game's session state.")
             return
         end
+        NotifyInfo("[DEBUG]", "Step 3: Connected to session state. Monitoring...")
         
-        NotifySuccess("Auto Weather", "System is now active and monitoring weather status.")
-
         while state.AutoWeather do
             pcall(function()
                 local weatherData = SessionReplion:Get({"Weather"})
-                local isWeatherActive = weatherData and weatherData.CurrentWeather and weatherData.CurrentWeather ~= "None"
+                local currentStatus = weatherData and weatherData.CurrentWeather or "N/A"
+                
+                -- This notification will appear every few seconds
+                NotifyInfo("[DEBUG]", "Checking weather... Current status: " .. tostring(currentStatus), 3)
+
+                local isWeatherActive = currentStatus ~= "N/A" and currentStatus ~= "None" and currentStatus ~= ""
 
                 if not isWeatherActive and #state.SelectedWeathers > 0 then
-                    NotifyInfo("Auto Weather", "No active weather detected. Triggering a new one...")
+                    NotifyInfo("[DEBUG]", "Step 4: No active weather detected. Triggering a new one...")
                     local chosenWeather = state.SelectedWeathers[math.random(1, #state.SelectedWeathers)]
+                    
+                    NotifyWarning("[DEBUG]", "Step 5: Firing remote to activate: " .. chosenWeather)
                     weatherRemote:InvokeServer(chosenWeather)
+                    
                     task.wait(5) 
                 end
             end)
-            task.wait(1)
+            task.wait(2) -- Check every 2 seconds
         end
     end)
 end
@@ -243,7 +255,7 @@ end)
 -------------------------------------------
 
 local Window = WindUI:CreateWindow({
-    Title = "e-Fishery V1.6", Author = "by Zee (WindUI Edition)", Folder = "e-Fishery",
+    Title = "e-Fishery V1.7 (Debug)", Author = "by Zee (WindUI Edition)", Folder = "e-Fishery",
     Size = UDim2.fromOffset(600, 520), Transparent = true, Theme = "Dark", ScrollBarEnabled = true, HideSearchBar = true,
     User = { Enabled = true, Anonymous = false, Callback = function() end }
 })
@@ -253,7 +265,7 @@ Window:EditOpenButton({
     Color = ColorSequence.new(Color3.fromHex("9600FF"), Color3.fromHex("AEBAF8")), Draggable = true,
 })
 
-Window:Tag({ Title = "STABLE", Color = Color3.fromHex("#30ff6a") }); WindUI:SetNotificationLower(true)
+Window:Tag({ Title = "DEBUG MODE", Color = Color3.fromHex("#ff6666") }); WindUI:SetNotificationLower(true)
 
 -------------------------------------------
 ----- =======[ ALL TABS ]
