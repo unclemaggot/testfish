@@ -296,7 +296,7 @@ end)
 -------------------------------------------
 
 local Window = WindUI:CreateWindow({
-    Title = "e-Fishery V1.1",
+    Title = "e-Fishery V1.2",
     Icon = "shrimp",
     Author = "by Zee (WindUI Edition)",
     Folder = "e-Fishery",
@@ -656,9 +656,10 @@ local function startAutoWeather()
             NotifyError("Weather System", "Could not find the game's network folder.")
             return 
         end
-        local weatherRemote = net:FindFirstChild("RF/UseWeatherDevice")
+        -- This remote name is confirmed from the ArcvourHUB reference script.
+        local weatherRemote = net:FindFirstChild("RF/PurchaseWeatherEvent")
         if not weatherRemote then
-            NotifyError("Weather System", "Could not find 'RF/UseWeatherDevice' remote.")
+            NotifyError("Weather System", "Could not find 'RF/PurchaseWeatherEvent' remote.")
             return
         end
 
