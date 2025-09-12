@@ -296,11 +296,11 @@ end)
 -------------------------------------------
 
 local Window = WindUI:CreateWindow({
-    Title = "e-Fishery V1.4",
+    Title = "e-Fishery V1.5",
     Icon = "shrimp",
     Author = "by Zee (WindUI Edition)",
     Folder = "e-Fishery",
-    Size = UDim2.fromOffset(600, 480), -- Height is kept larger for safety
+    Size = UDim2.fromOffset(600, 480),
     Transparent = true,
     Theme = "Dark",
     KeySystem = false,
@@ -641,6 +641,7 @@ end
 ----- =======[ WEATHER TAB ]
 -------------------------------------------
 local autoWeatherLoop
+local weatherDropdown
 
 local function stopAutoWeather()
     if autoWeatherLoop then task.cancel(autoWeatherLoop); autoWeatherLoop = nil end
@@ -686,8 +687,6 @@ local function startAutoWeather()
     end)
 end
 
--- Store toggle objects to set them on load
-local weatherToggles = {}
 local mainWeatherToggle
 
 Weather:Toggle({
@@ -706,68 +705,17 @@ Weather:Toggle({
     mainWeatherToggle = toggle
 end)
 
-Weather:Divider()
-
--- The helper function was removed and toggles are created directly for better reliability.
-Weather:Toggle({
-    Title = "Cloudy",
-    Default = table.find(savedData.selectedWeathers or {}, "Cloudy") ~= nil,
-    Callback = function(Value)
-        local weatherName = "Cloudy"
-        local index = table.find(state.SelectedWeathers, weatherName)
-        if Value and not index then
-            table.insert(state.SelectedWeathers, weatherName)
-        elseif not Value and index then
-            table.remove(state.SelectedWeathers, index)
-        end
+weatherDropdown = Weather:Dropdown({
+    Title = "Select Weather to Use",
+    Desc = "Check the boxes for weathers you want in the auto-rotation.",
+    Values = {"Cloudy", "Windy", "Storm", "Radiant"},
+    Multi = true,
+    AllowNone = true,
+    Callback = function(selected_weathers)
+        state.SelectedWeathers = selected_weathers
         saveConfig()
     end
-}):Get(function(toggle) weatherToggles["Cloudy"] = toggle end)
-
-Weather:Toggle({
-    Title = "Windy",
-    Default = table.find(savedData.selectedWeathers or {}, "Windy") ~= nil,
-    Callback = function(Value)
-        local weatherName = "Windy"
-        local index = table.find(state.SelectedWeathers, weatherName)
-        if Value and not index then
-            table.insert(state.SelectedWeathers, weatherName)
-        elseif not Value and index then
-            table.remove(state.SelectedWeathers, index)
-        end
-        saveConfig()
-    end
-}):Get(function(toggle) weatherToggles["Windy"] = toggle end)
-
-Weather:Toggle({
-    Title = "Storm",
-    Default = table.find(savedData.selectedWeathers or {}, "Storm") ~= nil,
-    Callback = function(Value)
-        local weatherName = "Storm"
-        local index = table.find(state.SelectedWeathers, weatherName)
-        if Value and not index then
-            table.insert(state.SelectedWeathers, weatherName)
-        elseif not Value and index then
-            table.remove(state.SelectedWeathers, index)
-        end
-        saveConfig()
-    end
-}):Get(function(toggle) weatherToggles["Storm"] = toggle end)
-
-Weather:Toggle({
-    Title = "Radiant",
-    Default = table.find(savedData.selectedWeathers or {}, "Radiant") ~= nil,
-    Callback = function(Value)
-        local weatherName = "Radiant"
-        local index = table.find(state.SelectedWeathers, weatherName)
-        if Value and not index then
-            table.insert(state.SelectedWeathers, weatherName)
-        elseif not Value and index then
-            table.remove(state.SelectedWeathers, index)
-        end
-        saveConfig()
-    end
-}):Get(function(toggle) weatherToggles["Radiant"] = toggle end)
+})
 
 -------------------------------------------
 ----- =======[ INITIALIZE AND RESTORE SESSION ]
@@ -789,14 +737,10 @@ local function applyLoadedState()
         autoSellToggle:Set(true)
     end
 
-    -- Restore weather settings
-    if savedData.selectedWeathers then
+    -- Restore weather settings using the new dropdown
+    if weatherDropdown and savedData.selectedWeathers then
+        weatherDropdown:Set(savedData.selectedWeathers)
         state.SelectedWeathers = savedData.selectedWeathers
-        for weatherName, toggleObject in pairs(weatherToggles) do
-            if table.find(state.SelectedWeathers, weatherName) then
-                toggleObject:Set(true)
-            end
-        end
     end
 
     if savedData.autoWeather and mainWeatherToggle then
