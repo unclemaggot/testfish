@@ -2,8 +2,13 @@
 ----- =======[ Load WindUI ]
 -------------------------------------------
 
-local Version = "1.6.45"
-local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/download/" .. Version .. "/main.lua"))()
+-- Using the more stable WindUI link from the reference script
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+if not WindUI then
+    -- If the library fails to load, stop the script with an error.
+    error("e-Fishery: Could not load the WindUI library. The script cannot continue.")
+    return
+end
 
 -------------------------------------------
 ----- =======[ GLOBAL & CORE FUNCTIONS ]
@@ -180,10 +185,7 @@ local function startAutoFish()
                 chargeFunc:InvokeServer(workspace:GetServerTimeNow()); task.wait(0.1)
                 startMini:InvokeServer(-0.75, 1)
                 if AnimationController and AnimationController.PlayAnimation then AnimationController:PlayAnimation("Reel") end
-                
-                -- MODIFIED: Increased wait time from 0.2 to 1.5 to make the reeling animation visible.
                 task.wait(1.5)
-                
                 for i=1,20 do complete:FireServer(); task.wait(0.05) end
             end)
             local t = os.clock(); while os.clock() - t < 0.7 and state.AutoFish do task.wait() end
@@ -213,7 +215,7 @@ end)
 -------------------------------------------
 
 local Window = WindUI:CreateWindow({
-    Title = "e-Fishery V3.1", Author = "by Zee (WindUI Edition)", Folder = "e-Fishery",
+    Title = "e-Fishery (Definitive Edition)", Author = "by Zee (WindUI Edition)", Folder = "e-Fishery",
     Size = UDim2.fromOffset(600, 520), Transparent = true, Theme = "Dark", ScrollBarEnabled = true, HideSearchBar = true,
     User = { Enabled = true, Anonymous = false, Callback = function() end }
 })
