@@ -106,34 +106,26 @@ local function startAutoWeather()
             NotifyError("Auto Weather", "Could not find 'RF/PurchaseWeatherEvent' remote.")
             return
         end
-
-        -- FIX: Use the "Data" Replion which is known to work, instead of "Session".
-        local DataReplion = Replion.Client:WaitReplion("Data")
-        if not DataReplion then
-            NotifyError("Auto Weather", "Could not connect to the game's main data state.")
-            return
-        end
         
-        NotifySuccess("Auto Weather", "System is now active and monitoring weather.")
+        NotifySuccess("Auto Weather", "System is now active and detecting weather via UI.")
 
         while state.AutoWeather do
             pcall(function()
-                -- Read the current weather from the "Data" state
-                local weatherData = DataReplion:Get({"Weather"})
-                local currentStatus = weatherData and weatherData.CurrentWeather or "N/A"
-                
-                local isWeatherActive = currentStatus ~= "N/A" and currentStatus ~= "None" and currentStatus ~= ""
+                -- DETECT WEATHER VIA UI: Look for the on-screen weather display.
+                local weatherGui = player.PlayerGui:FindFirstChild("Weather")
+                local isWeatherActiveOnScreen = weatherGui and weatherGui.Enabled and weatherGui:FindFirstChild("Display") and weatherGui.Display.Visible
 
-                if not isWeatherActive and #state.SelectedWeathers > 0 then
-                    NotifyInfo("Auto Weather", "No active weather detected. Activating a new one...")
+                if not isWeatherActiveOnScreen and #state.SelectedWeathers > 0 then
+                    NotifyInfo("Auto Weather", "No active weather UI detected. Activating a new one...")
                     local chosenWeather = state.SelectedWeathers[math.random(1, #state.SelectedWeathers)]
                     
                     weatherRemote:InvokeServer(chosenWeather)
                     
+                    -- Wait for a few seconds after activating to give the UI time to appear.
                     task.wait(5) 
                 end
             end)
-            task.wait(1)
+            task.wait(1) -- Check every second
         end
     end)
 end
@@ -249,7 +241,7 @@ end)
 -------------------------------------------
 
 local Window = WindUI:CreateWindow({
-    Title = "e-Fishery V1.8", Author = "by Zee (WindUI Edition)", Folder = "e-Fishery",
+    Title = "e-Fishery V2.0", Author = "by Zee (WindUI Edition)", Folder = "e-Fishery",
     Size = UDim2.fromOffset(600, 520), Transparent = true, Theme = "Dark", ScrollBarEnabled = true, HideSearchBar = true,
     User = { Enabled = true, Anonymous = false, Callback = function() end }
 })
@@ -316,7 +308,7 @@ autoSellToggle = Main:Toggle({ Title = "Auto Sell", Callback = function(v) state
 Main:Divider()
 
 mainWeatherToggle = Main:Toggle({
-    Title = "Enable Auto Weather", Desc = "Automatically uses a selected weather when the current one expires.",
+    Title = "Enable Auto Weather", Desc = "Uses the most reliable UI detection method.",
     Callback = function(v) state.AutoWeather = v; if v then startAutoWeather() else stopAutoWeather() end; saveConfig() end
 })
 weatherDropdown = Main:Dropdown({
