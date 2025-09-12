@@ -296,11 +296,11 @@ end)
 -------------------------------------------
 
 local Window = WindUI:CreateWindow({
-    Title = "e-Fishery V1.2",
+    Title = "e-Fishery V1.3",
     Icon = "shrimp",
     Author = "by Zee (WindUI Edition)",
     Folder = "e-Fishery",
-    Size = UDim2.fromOffset(600, 400),
+    Size = UDim2.fromOffset(600, 480), -- Increased height from 400 to 480
     Transparent = true,
     Theme = "Dark",
     KeySystem = false,
