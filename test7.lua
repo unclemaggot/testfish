@@ -270,7 +270,7 @@ local function stopAutoFish()
 end
 
 -- =========================
--- AUTO BUY WEATHER [NEW]
+-- AUTO BUY WEATHER
 -- =========================
 local function randomDelay(min, max)
     return math.random(min * 100, max * 100) / 100
@@ -376,7 +376,7 @@ WindUI:SetNotificationLower(true)
 local Home = Window:Tab({ Title = "Developer Info", Icon = "hard-drive" })
 local Main = Window:Tab({ Title = "Main", Icon = "toggle-right" })
 local AutoFarm = Window:Tab({ Title = "Auto Farm", Icon = "map" })
-local UtilitiesTab = Window:Tab({ Title = "Utilities", Icon = "atom" }) -- [NEW]
+local UtilitiesTab = Window:Tab({ Title = "Utilities", Icon = "atom" })
 local FishNotif = Window:Tab({ Title = "Fish Notification", Icon = "bell-ring" })
 
 -------------------------------------------
@@ -522,7 +522,7 @@ for name, pos in pairs(island_locations) do
 end
 
 -------------------------------------------
------ =======[ UTILITIES TAB ] [NEW]
+----- =======[ UTILITIES TAB ]
 -------------------------------------------
 
 UtilitiesTab:Dropdown({
@@ -547,6 +547,15 @@ UtilitiesTab:Dropdown({
                 autoBuyWeather(weatherType)
             end
         end
+    end
+})
+
+UtilitiesTab:Button({
+    Title = "Teleport to Esoteric Island",
+    Callback = function()
+        local esotericPosition = CFrame.new(3231, -1303, 1401)
+        teleportTo(esotericPosition)
+        NotifySuccess("Teleport", "Moving to Esoteric Island...")
     end
 })
 
