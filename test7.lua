@@ -14,7 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
--- Safe require helper from Rayfield version
+-- Safe require helper
 local function safeRequire(pathTbl)
     local ptr = ReplicatedStorage
     for _, seg in ipairs(pathTbl) do
@@ -31,7 +31,7 @@ local AnimationController = safeRequire({"Controllers","AnimationController"})
 local Replion = safeRequire({"Packages","Replion"}) or safeRequire({"Packages","replion"})
 local ItemUtility = safeRequire({"Shared","ItemUtility"})
 
--- Net folder helper from Rayfield version
+-- Net folder helper
 local function getNetFolder()
     local packages = ReplicatedStorage:WaitForChild("Packages", 10)
     if not packages then return nil end
@@ -296,11 +296,11 @@ end)
 -------------------------------------------
 
 local Window = WindUI:CreateWindow({
-    Title = "e-Fishery V1.3",
+    Title = "e-Fishery V1.4",
     Icon = "shrimp",
     Author = "by Zee (WindUI Edition)",
     Folder = "e-Fishery",
-    Size = UDim2.fromOffset(600, 480), -- Increased height from 400 to 480
+    Size = UDim2.fromOffset(600, 480), -- Height is kept larger for safety
     Transparent = true,
     Theme = "Dark",
     KeySystem = false,
@@ -650,20 +650,17 @@ local function startAutoWeather()
     if autoWeatherLoop then stopAutoWeather() end
 
     autoWeatherLoop = task.spawn(function()
-        -- Get the network folder and the specific remote for weather
         local net = getNetFolder()
         if not net then
             NotifyError("Weather System", "Could not find the game's network folder.")
             return 
         end
-        -- This remote name is confirmed from the ArcvourHUB reference script.
         local weatherRemote = net:FindFirstChild("RF/PurchaseWeatherEvent")
         if not weatherRemote then
             NotifyError("Weather System", "Could not find 'RF/PurchaseWeatherEvent' remote.")
             return
         end
 
-        -- Connect to the game's session state to monitor the current weather
         local SessionReplion = Replion.Client:WaitReplion("Session")
         if not SessionReplion then
             NotifyError("Weather System", "Could not connect to the game's session state.")
@@ -674,25 +671,16 @@ local function startAutoWeather()
 
         while state.AutoWeather do
             pcall(function()
-                -- Read the current weather directly from the game's state
                 local weatherData = SessionReplion:Get({"Weather"})
                 local isWeatherActive = weatherData and weatherData.CurrentWeather and weatherData.CurrentWeather ~= "None"
 
-                -- Check if weather is NOT active and if the user has selected a weather to use
                 if not isWeatherActive and #state.SelectedWeathers > 0 then
                     NotifyInfo("Auto Weather", "No active weather detected. Triggering a new one...")
-                    
-                    -- Pick a random weather from the user's selection
                     local chosenWeather = state.SelectedWeathers[math.random(1, #state.SelectedWeathers)]
-                    
-                    -- Use the weather device
                     weatherRemote:InvokeServer(chosenWeather)
-                    
-                    -- Wait for a few seconds after triggering to allow the game state to update
                     task.wait(5) 
                 end
             end)
-            -- Check the weather status every second
             task.wait(1)
         end
     end)
@@ -720,29 +708,66 @@ end)
 
 Weather:Divider()
 
--- Helper function for weather toggle callbacks
-local function createWeatherToggle(weatherName)
-    Weather:Toggle({
-        Title = weatherName,
-        Default = table.find(savedData.selectedWeathers or {}, weatherName) ~= nil,
-        Callback = function(Value)
-            local index = table.find(state.SelectedWeathers, weatherName)
-            if Value and not index then
-                table.insert(state.SelectedWeathers, weatherName)
-            elseif not Value and index then
-                table.remove(state.SelectedWeathers, index)
-            end
-            saveConfig()
+-- The helper function was removed and toggles are created directly for better reliability.
+Weather:Toggle({
+    Title = "Cloudy",
+    Default = table.find(savedData.selectedWeathers or {}, "Cloudy") ~= nil,
+    Callback = function(Value)
+        local weatherName = "Cloudy"
+        local index = table.find(state.SelectedWeathers, weatherName)
+        if Value and not index then
+            table.insert(state.SelectedWeathers, weatherName)
+        elseif not Value and index then
+            table.remove(state.SelectedWeathers, index)
         end
-    }):Get(function(toggle)
-        weatherToggles[weatherName] = toggle
-    end)
-end
+        saveConfig()
+    end
+}):Get(function(toggle) weatherToggles["Cloudy"] = toggle end)
 
-createWeatherToggle("Cloudy")
-createWeatherToggle("Windy")
-createWeatherToggle("Storm")
-createWeatherToggle("Radiant")
+Weather:Toggle({
+    Title = "Windy",
+    Default = table.find(savedData.selectedWeathers or {}, "Windy") ~= nil,
+    Callback = function(Value)
+        local weatherName = "Windy"
+        local index = table.find(state.SelectedWeathers, weatherName)
+        if Value and not index then
+            table.insert(state.SelectedWeathers, weatherName)
+        elseif not Value and index then
+            table.remove(state.SelectedWeathers, index)
+        end
+        saveConfig()
+    end
+}):Get(function(toggle) weatherToggles["Windy"] = toggle end)
+
+Weather:Toggle({
+    Title = "Storm",
+    Default = table.find(savedData.selectedWeathers or {}, "Storm") ~= nil,
+    Callback = function(Value)
+        local weatherName = "Storm"
+        local index = table.find(state.SelectedWeathers, weatherName)
+        if Value and not index then
+            table.insert(state.SelectedWeathers, weatherName)
+        elseif not Value and index then
+            table.remove(state.SelectedWeathers, index)
+        end
+        saveConfig()
+    end
+}):Get(function(toggle) weatherToggles["Storm"] = toggle end)
+
+Weather:Toggle({
+    Title = "Radiant",
+    Default = table.find(savedData.selectedWeathers or {}, "Radiant") ~= nil,
+    Callback = function(Value)
+        local weatherName = "Radiant"
+        local index = table.find(state.SelectedWeathers, weatherName)
+        if Value and not index then
+            table.insert(state.SelectedWeathers, weatherName)
+        elseif not Value and index then
+            table.remove(state.SelectedWeathers, index)
+        end
+        saveConfig()
+    end
+}):Get(function(toggle) weatherToggles["Radiant"] = toggle end)
 
 -------------------------------------------
 ----- =======[ INITIALIZE AND RESTORE SESSION ]
