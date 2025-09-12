@@ -249,4 +249,194 @@ if inviteData then Home:Paragraph({ Title = string.format("[DISCORD] %s", invite
 -------------------------------------------
 ----- =======[ CONFIG & SAVE/LOAD SYSTEM ]
 -------------------------------------------
-local savedData = { webhookUrl = "", autoFish = false, autoFavourite = false, autoSell = false, webhookCategories = {"Secret"}, last
+local savedData = { webhookUrl = "", autoFish = false, autoFavourite = false, autoSell = false, webhookCategories = {"Secret"}, lastFarmPosition = nil, autoBuyWeather = false, selectedWeathers = {} }
+local file_name = "e_fishery_session.json"
+local webhookUrl, SelectedCategories
+
+local function saveConfig()
+    if writefile then
+        savedData.webhookUrl, savedData.autoFish, savedData.autoFavourite, savedData.autoSell = webhookUrl, state.AutoFish, state.AutoFavourite, state.AutoSell
+        savedData.webhookCategories, savedData.lastFarmPosition, savedData.autoBuyWeather, savedData.selectedWeathers = SelectedCategories, lastFarmPosition, state.AutoBuyWeather, state.SelectedWeathers
+        writefile(file_name, HttpService:JSONEncode(savedData))
+    end
+end
+local function loadConfig()
+    if isfile and isfile(file_name) then
+        local s, data = pcall(function() return HttpService:JSONDecode(readfile(file_name)) end)
+        if s and type(data) == "table" then for k, v in pairs(data) do savedData[k] = v end end
+    end
+    webhookUrl, SelectedCategories, lastFarmPosition = savedData.webhookUrl, savedData.webhookCategories, savedData.lastFarmPosition
+end
+
+-------------------------------------------
+----- =======[ MAIN TAB ]
+-------------------------------------------
+
+local autoFishToggle, autoFavouriteToggle, autoSellToggle
+
+autoFishToggle = Main:Toggle({ Title = "Auto Fish", Callback = function(v) state.AutoFish = v; if v then startAutoFish() else stopAutoFish() end; saveConfig() end })
+autoFavouriteToggle = Main:Toggle({ Title = "Auto Favourite", Callback = function(v) state.AutoFavourite = v; if v then startAutoFavourite() end; saveConfig() end })
+autoSellToggle = Main:Toggle({ Title = "Auto Sell", Callback = function(v) state.AutoSell = v; if v then startAutoSell() end; saveConfig() end })
+
+-------------------------------------------
+----- =======[ AUTO FARM TAB ]
+-------------------------------------------
+local island_locations = {
+    ["Crater Islands"] = { CFrame.new(1066.18, 57.20, 5045.55, -0.68, 0, 0.73, 0, 1, 0, -0.73, 0, -0.68), CFrame.new(1057.28, 33.08, 5133.79, 0.83, 0, 0.55, 0, 1, 0, -0.55, 0, 0.83) },
+    ["Tropical Grove"] = { CFrame.new(-2165.05, 2.77, 3639.87, -0.58, 0, -0.80, 0, 1, 0, 0.80, 0, -0.58) }, ["Vulcano"] = { CFrame.new(-701.44, 48.14, 93.15, -0.07, 0, -0.99, 0, 1, 0, 0.99, 0, -0.07) },
+    ["Coral Reefs"] = { CFrame.new(-3118.39, 2.42, 2135.26, 0.92, 0, -0.38, 0, 1, 0, 0.38, 0, 0.92) }, ["Winter"] = { CFrame.new(2036.15, 6.54, 3381.88, 0.94, 0, -0.33, 0, 1, 0, 0.33, 0, 0.94) },
+    ["Machine"] = { CFrame.new(-1459.37, 14.71, 1831.51, 0.77, 0, -0.62, 0, 1, 0, 0.62, 0, 0.77) }, ["Treasure Room"] = { CFrame.new(-3625.07, -279.07, -1594.57, 0.91, 0, -0.39, 0, 1, 0, 0.39, 0, 0.91) },
+    ["Sisyphus Statue"] = { CFrame.new(-3777.43, -135.07, -975.19, -0.28, 0, -0.95, 0, 1, 0, 0.95, 0, -0.28) }, ["Fisherman Island"] = { CFrame.new(-75.24, 3.24, 3103.45, -0.99, 0, -0.08, 0, 1, 0, 0.08, 0, -0.99) }
+}
+for name, pos in pairs(island_locations) do AutoFarm:Button({ Title = name, Callback = function() lastFarmPosition = pos; teleportTo(pos); task.wait(0.8); state.AutoFish = true; startAutoFish(); if autoFishToggle then autoFishToggle:Set(true) end; saveConfig() end }) end
+
+-------------------------------------------
+----- =======[ BUY WEATHER TAB ]
+-------------------------------------------
+local autoBuyWeatherToggle, autoBuyWeatherDropdown
+
+local function purchaseSelectedWeathers()
+    if not state.AutoBuyWeather or #state.SelectedWeathers == 0 then return end
+
+    NotifyInfo("Auto Buy Weather", "Attempting to activate a selected weather...")
+    local chosenWeather = state.SelectedWeathers[math.random(1, #state.SelectedWeathers)]
+    local remote = getNetFolder() and getNetFolder():FindFirstChild("RF/PurchaseWeatherEvent")
+    if remote then
+        pcall(remote.InvokeServer, remote, chosenWeather)
+    end
+end
+
+autoBuyWeatherToggle = BuyWeather:Toggle({
+    Title = "Enable Auto Buy Weather",
+    Callback = function(value)
+        state.AutoBuyWeather = value
+        if value then
+            if autoBuyWeatherLoop then task.cancel(autoBuyWeatherLoop) end
+            autoBuyWeatherLoop = task.spawn(function()
+                purchaseSelectedWeathers() -- Run once immediately
+                while state.AutoBuyWeather do
+                    task.wait(990) -- Wait ~16.5 minutes
+                    if state.AutoBuyWeather then
+                        purchaseSelectedWeathers()
+                    end
+                end
+            end)
+        else
+            if autoBuyWeatherLoop then task.cancel(autoBuyWeatherLoop); autoBuyWeatherLoop = nil end
+        end
+        saveConfig()
+    end
+})
+
+local weathersData = {
+    { Name = "Windy", Price = 10000 }, { Name = "Snow", Price = 15000 }, { Name = "Cloudy", Price = 20000 },
+    { Name = "Storm", Price = 35000 }, { Name = "Radiant", Price = 50000 }, { Name = "Shark Hunt", Price = 300000 }
+}
+table.sort(weathersData, function(a, b) return a.Price < b.Price end)
+local weatherNames = {}; for _, weather in ipairs(weathersData) do if weather.Name ~= "Snow" and weather.Name ~= "Shark Hunt" then table.insert(weatherNames, weather.Name) end end
+
+autoBuyWeatherDropdown = BuyWeather:Dropdown({
+    Title = "Select Weather to Auto Buy", Values = weatherNames, Multi = true, AllowNone = true,
+    Callback = function(value) state.SelectedWeathers = value; saveConfig() end
+})
+
+BuyWeather:Divider()
+BuyWeather:Paragraph({Title = "Manual Purchase", Desc = "Instantly buy a weather effect."})
+
+for _, weatherData in ipairs(weathersData) do 
+    local buttonTitle = string.format("%s (%s Coins)", weatherData.Name, formatPrice(weatherData.Price))
+    BuyWeather:Button({ Title = buttonTitle, Callback = function() 
+        local remote = getNetFolder() and getNetFolder():FindFirstChild("RF/PurchaseWeatherEvent")
+        if remote then pcall(remote.InvokeServer, remote, weatherData.Name); NotifyInfo("Manual Purchase", "Sent request to buy " .. weatherData.Name) end
+    end })
+end
+
+-------------------------------------------
+----- =======[ FISH NOTIF TAB ]
+-------------------------------------------
+local categoriesDropdown
+FishNotif:Paragraph({ Title = "Fish Notification", Color = "Green", Desc = [[Sends a notification to Discord when you catch a rare fish.]] })
+
+local function validateWebhook(url)
+    if not url or url == "" then return false, "URL is empty" end
+    if not url:match("^https://discord.com/api/webhooks/%d+/.+") then return false, "Invalid URL format." end
+    local s, r = pcall(game.HttpGet, game, url); if not s then return false, "Failed to connect" end
+    local ok, data = pcall(HttpService.JSONDecode, HttpService, r); if not ok or not data or not data.channel_id then return false, "Invalid" end
+    return true, data.channel_id
+end
+
+FishNotif:Input({ Title = "Webhook URL", Desc = "Paste your full Discord webhook URL here.", Placeholder = "https://discord.com/api/webhooks/...", Default = savedData.webhookUrl,
+    Callback = function(text)
+        if text == "" then webhookUrl = nil; saveConfig(); NotifyInfo("Webhook Cleared", "Notifications disabled."); return end
+        local isValid, result = validateWebhook(text)
+        if isValid then webhookUrl = text; saveConfig(); NotifySuccess("Webhook Set", "Channel ID: "..tostring(result)) else webhookUrl = nil; NotifyError("URL Invalid", tostring(result)) end
+    end
+})
+
+local FishDataById, VariantsByName = {}, {}; local rarityMap = { [1]="Common", [2]="Uncommon", [3]="Rare", [4]="Epic", [5]="Legendary", [6]="Mythic", [7]="Secret" }
+pcall(function()
+    for _, item in ipairs(ReplicatedStorage.Items:GetChildren()) do local ok, d = pcall(require, item); if ok and d.Data and d.Data.Type == "Fishes" then FishDataById[d.Data.Id] = { Name=d.Data.Name, SellPrice=d.SellPrice or 0, Tier=d.Data.Tier, Icon=d.IconId or d.Data.Icon or "" } end end
+    for _, v in ipairs(ReplicatedStorage.Variants:GetChildren()) do local ok, d = pcall(require, v); if ok and d.Data and d.Data.Type == "Variant" then VariantsByName[d.Data.Name] = d.SellMultiplier or 1 end end
+end)
+
+categoriesDropdown = FishNotif:Dropdown({ Title = "Select Fish Categories", Desc = "Choose categories to send to webhook", Values = {"Secret", "Legendary", "Mythic", "Epic"}, Multi = true, Default = {"Secret"}, Callback = function(selected) SelectedCategories = selected; saveConfig() end })
+
+local function GetRobloxImage(assetId)
+    local s, r = pcall(game.HttpGet, game, "https://thumbnails.roblox.com/v1/assets?assetIds=" .. assetId .. "&size=420x420&format=Png&isCircular=false")
+    if s then local data = HttpService:JSONDecode(r); if data and data.data and data.data[1] then return data.data[1].imageUrl end end
+end
+
+local function sendFishWebhook(fishName, rarityText, assetId, itemId, variantId)
+    if not webhookUrl or webhookUrl == "" then return end
+    local username, imageUrl = player.DisplayName, GetRobloxImage(assetId); if not imageUrl then return end
+    local caught, rarest = player:FindFirstChild("leaderstats") and player.leaderstats.Caught, player:FindFirstChild("leaderstats") and player.leaderstats["Rarest Fish"]
+    local basePrice = (FishDataById[itemId] and FishDataById[itemId].SellPrice or 0) * (VariantsByName[variantId] or 1)
+    local data = { username = "e-Fishery", embeds = {{ title = "Fish Caught!", description = string.format("Player **%s** caught a **%s** (%s)!", username, fishName, rarityText), color = tonumber("0x00bfff"), image = { url = imageUrl },
+        fields = { { name = "Sell Price", value = tostring(basePrice), inline = true}, { name = "Total Caught", value = tostring(caught and caught.Value or "N/A"), inline = true}, { name = "Rarest Fish", value = tostring(rarest and rarest.Value or "N/A"), inline = true} },
+        footer = { text = "e-Fishery Notifier | " .. os.date("%I:%M:%S %p", os.time()) } }} }
+    local requestFunc = syn and syn.request or http and http.request or http_request or request or fluxus and fluxus.request
+    if requestFunc then requestFunc({ Url = webhookUrl, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode(data) }) end
+end
+
+local REObtainedNewFishNotification = getNetFolder() and getNetFolder():FindFirstChild("RE/ObtainedNewFishNotification")
+if REObtainedNewFishNotification then
+    REObtainedNewFishNotification.OnClientEvent:Connect(function(itemId, _, eventData)
+        lastCatchTimestamp = os.time()
+        if not webhookUrl or webhookUrl == "" then return end
+        pcall(function()
+            local fishInfo = FishDataById[itemId]; if not fishInfo then return end
+            local rarityName = rarityMap[fishInfo.Tier] or "Unknown"
+            local isTarget = false; for _, category in pairs(SelectedCategories) do if string.lower(category) == string.lower(rarityName) then isTarget = true; break end end
+            if isTarget then
+                local assetId = string.match(fishInfo.Icon or "", "%d+"); if not assetId then return end
+                local variantId = eventData and eventData.InventoryItem and eventData.InventoryItem.Metadata and eventData.InventoryItem.Metadata.VariantId
+                sendFishWebhook(fishInfo.Name, rarityName, assetId, itemId, variantId)
+            end
+        end)
+    end)
+end
+
+-------------------------------------------
+----- =======[ INITIALIZE AND RESTORE SESSION ]
+-------------------------------------------
+
+local function applyLoadedState()
+    if categoriesDropdown and savedData.webhookCategories then categoriesDropdown:Set(savedData.webhookCategories) end
+    if savedData.autoFavourite then state.AutoFavourite = true; autoFavouriteToggle:Set(true) end
+    if savedData.autoSell then state.AutoSell = true; autoSellToggle:Set(true) end
+
+    -- Restore state for the new Buy Weather tab
+    if autoBuyWeatherDropdown and savedData.selectedWeathers then autoBuyWeatherDropdown:Set(savedData.selectedWeathers); state.SelectedWeathers = savedData.selectedWeathers end
+    if autoBuyWeatherToggle and savedData.autoBuyWeather then state.AutoBuyWeather = true; autoBuyWeatherToggle:Set(true) end
+    
+    if savedData.autoFish and savedData.lastFarmPosition then
+        NotifyInfo("Session Restored", "Returning to last farm location...")
+        teleportTo(savedData.lastFarmPosition); task.wait(1.5)
+        state.AutoFish = true; autoFishToggle:Set(true)
+    elseif savedData.autoFish then
+         state.AutoFish = true; autoFishToggle:Set(true)
+    end
+end
+
+loadConfig()
+applyLoadedState()
